@@ -8,15 +8,25 @@ import {
 } from '@/lib/data';
 import { todayStr, humanDate } from '@/lib/dates';
 import { color, space, border } from '@/lib/tokens';
-import { input as inputStyle, buttonPrimary, heading, textMuted } from '@/lib/components';
+import {
+  input as inputStyle,
+  buttonPrimary,
+  buttonSecondary,
+  heading,
+  textMuted,
+} from '@/lib/components';
 import TaskRow from './TaskRow';
+import RecurringCreateModal from './RecurringCreateModal';
+import { useRefresh } from './RefreshContext';
 
 export default function DailySidebar() {
+  const { version, refresh } = useRefresh();
   const [today] = useState(todayStr);
   const [tasks, setTasks] = useState([]);
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [showRecurring, setShowRecurring] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -27,7 +37,7 @@ export default function DailySidebar() {
     } finally {
       setLoading(false);
     }
-  }, [today]);
+  }, [today, version]);
 
   useEffect(() => {
     load();
@@ -40,7 +50,7 @@ export default function DailySidebar() {
     setTitle('');
     try {
       await createOneOffTask({ title: t, scheduledDate: today });
-      await load();
+      refresh();
     } catch (e) {
       setError(e.message);
     }
@@ -49,7 +59,7 @@ export default function DailySidebar() {
   const onSetStatus = async (id, status) => {
     try {
       await setInstanceStatus(id, status);
-      await load();
+      refresh();
     } catch (e) {
       setError(e.message);
     }
@@ -62,20 +72,30 @@ export default function DailySidebar() {
         <div style={{ ...textMuted, marginTop: space[1] }}>{humanDate(today)}</div>
       </div>
 
-      <form
-        onSubmit={add}
-        style={{ display: 'flex', gap: space[2], padding: space[4], borderBottom: border.default }}
-      >
-        <input
-          style={inputStyle}
-          placeholder="Add a task for today"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <button type="submit" style={buttonPrimary}>
-          Add
+      <div style={{ padding: space[4], borderBottom: border.default }}>
+        <form onSubmit={add} style={{ display: 'flex', gap: space[2] }}>
+          <input
+            style={inputStyle}
+            placeholder="Add a task for today"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <button type="submit" style={buttonPrimary}>
+            Add
+          </button>
+        </form>
+        <button
+          type="button"
+          style={{ ...buttonSecondary, width: '100%', marginTop: space[2] }}
+          onClick={() => setShowRecurring(true)}
+        >
+          New recurring task
         </button>
-      </form>
+      </div>
+
+      {showRecurring && (
+        <RecurringCreateModal onClose={() => setShowRecurring(false)} onCreated={refresh} />
+      )}
 
       <div style={{ flex: 1, overflowY: 'auto', padding: space[2] }}>
         {loading ? (

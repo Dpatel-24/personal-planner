@@ -7,6 +7,7 @@ import { heading } from '@/lib/components';
 import DailySidebar from '@/components/DailySidebar';
 import BoardView from '@/components/BoardView';
 import CalendarView from '@/components/CalendarView';
+import { RefreshProvider } from '@/components/RefreshContext';
 
 const TABS = ['Board', 'Calendar'];
 
@@ -26,7 +27,7 @@ export default function Home() {
   });
 
   return (
-    <>
+    <RefreshProvider>
       <Head>
         <title>Planner</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -69,6 +70,6 @@ export default function Home() {
           <DailySidebar />
         </aside>
       </div>
-    </>
+    </RefreshProvider>
   );
 }

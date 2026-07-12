@@ -7,6 +7,7 @@ import { todayStr, humanDate, addDays } from '@/lib/dates';
 import { color, space, font } from '@/lib/tokens';
 import { panel, textMuted } from '@/lib/components';
 import BoardCard from './BoardCard';
+import { useRefresh } from './RefreshContext';
 
 const COLUMNS = [
   { key: 'todo', label: 'To do' },
@@ -15,6 +16,7 @@ const COLUMNS = [
 ];
 
 export default function BoardView() {
+  const { version, refresh } = useRefresh();
   const [today] = useState(todayStr);
   const [instances, setInstances] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -32,7 +34,7 @@ export default function BoardView() {
     } finally {
       setLoading(false);
     }
-  }, [from, to]);
+  }, [from, to, version]);
 
   useEffect(() => {
     load();
@@ -41,7 +43,7 @@ export default function BoardView() {
   const onSetStatus = async (id, status) => {
     try {
       await setInstanceStatus(id, status);
-      await load();
+      refresh();
     } catch (e) {
       setError(e.message);
     }

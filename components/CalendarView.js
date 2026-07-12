@@ -6,6 +6,7 @@ import { fetchInstances, setInstanceStatus } from '@/lib/data';
 import { todayStr, addDays } from '@/lib/dates';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { buttonSecondary, textMuted } from '@/lib/components';
+import { useRefresh } from './RefreshContext';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const pad = (n) => String(n).padStart(2, '0');
@@ -20,6 +21,7 @@ function buildGrid(year, month) {
 }
 
 export default function CalendarView() {
+  const { version, refresh } = useRefresh();
   const today = todayStr();
   const [{ year, month }, setYm] = useState(() => {
     const now = new Date();
@@ -39,7 +41,7 @@ export default function CalendarView() {
     } catch (e) {
       setError(e.message);
     }
-  }, [from, to]);
+  }, [from, to, version]);
 
   useEffect(() => {
     load();
@@ -57,7 +59,7 @@ export default function CalendarView() {
   const toggle = async (inst) => {
     try {
       await setInstanceStatus(inst.id, inst.status === 'done' ? 'todo' : 'done');
-      await load();
+      refresh();
     } catch (e) {
       setError(e.message);
     }
