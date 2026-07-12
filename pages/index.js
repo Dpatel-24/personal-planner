@@ -1,25 +1,14 @@
 // App shell: main pane with view tabs (Board / Calendar) + persistent daily
-// sidebar. Board and Calendar are placeholders until 2f proper.
+// sidebar.
 import Head from 'next/head';
 import { useState } from 'react';
 import { color, space, radius, border, font } from '@/lib/tokens';
-import { card, heading, textMuted } from '@/lib/components';
+import { heading } from '@/lib/components';
 import DailySidebar from '@/components/DailySidebar';
 import BoardView from '@/components/BoardView';
+import CalendarView from '@/components/CalendarView';
 
 const TABS = ['Board', 'Calendar'];
-
-function PlaceholderView({ name }) {
-  return (
-    <div style={{ ...card, maxWidth: 520 }}>
-      <div style={heading}>{name}</div>
-      <p style={{ ...textMuted, marginTop: space[2], marginBottom: 0 }}>
-        This view is coming next. The daily list on the right is live — add a
-        task, check it off, or skip it, and it persists to the database.
-      </p>
-    </div>
-  );
-}
 
 export default function Home() {
   const [tab, setTab] = useState('Board');
@@ -65,7 +54,7 @@ export default function Home() {
             </nav>
           </header>
           <section style={{ flex: 1, padding: space[6] }}>
-            {tab === 'Board' ? <BoardView /> : <PlaceholderView name={tab} />}
+            {tab === 'Board' ? <BoardView /> : <CalendarView />}
           </section>
         </main>
 
