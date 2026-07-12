@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { card, heading, textMuted } from '@/lib/components';
 import DailySidebar from '@/components/DailySidebar';
+import BoardView from '@/components/BoardView';
 
 const TABS = ['Board', 'Calendar'];
 
@@ -64,7 +65,7 @@ export default function Home() {
             </nav>
           </header>
           <section style={{ flex: 1, padding: space[6] }}>
-            <PlaceholderView name={tab} />
+            {tab === 'Board' ? <BoardView /> : <PlaceholderView name={tab} />}
           </section>
         </main>
 
