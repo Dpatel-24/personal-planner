@@ -17,6 +17,7 @@ import {
 } from '@/lib/components';
 import TaskRow from './TaskRow';
 import RecurringCreateModal from './RecurringCreateModal';
+import EditModal from './EditModal';
 import { useRefresh } from './RefreshContext';
 
 export default function DailySidebar() {
@@ -27,6 +28,7 @@ export default function DailySidebar() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [showRecurring, setShowRecurring] = useState(false);
+  const [editing, setEditing] = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -105,9 +107,15 @@ export default function DailySidebar() {
         ) : tasks.length === 0 ? (
           <div style={{ ...textMuted, padding: space[2] }}>No tasks today.</div>
         ) : (
-          tasks.map((t) => <TaskRow key={t.id} instance={t} onSetStatus={onSetStatus} />)
+          tasks.map((t) => (
+            <TaskRow key={t.id} instance={t} onSetStatus={onSetStatus} onEdit={setEditing} />
+          ))
         )}
       </div>
+
+      {editing && (
+        <EditModal instance={editing} onClose={() => setEditing(null)} onSaved={refresh} />
+      )}
     </div>
   );
 }

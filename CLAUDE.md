@@ -108,28 +108,37 @@ stubbed, what's a known gap. This is the handoff to the next session.
   (gitignored; anon/public key only — no service_role anywhere in the tree).
 - `npm run dev` boots clean (HTTP 200 on /).
 
-### 2026-07-12 — Step 2 in progress (lib layer + daily sidebar slice)
-**Works:**
-- `lib/tokens.js` + `lib/components.js` populated (clean/minimal, light-only v1).
+### 2026-07-12 — Step 2 COMPLETE (all three views + recurrence + edit semantics)
+**Works — full lib layer:**
+- `lib/tokens.js` + `lib/components.js` (clean/minimal, light-only v1).
 - `lib/recurrence.js` — `expandOccurrences` + `reconcile` (guard-rule honored) +
   `generateInstances(template, windowDays=90)`. 8/8 logic tests pass.
-- `lib/supabaseClient.js` — shared anon client, verified against live DB.
-- `lib/data.js` — single data-access layer: fetchInstances / fetchInstancesForDate
-  (resolves inherit-vs-override), createOneOffTask, setInstanceStatus,
-  deleteInstance, createRecurringTask. Verified live w/ cleanup.
-- `lib/dates.js` — local-day helpers (todayStr, humanDate).
-- App shell (`pages/index.js`): tabs (Board/Calendar placeholders) + persistent
-  daily sidebar. `components/DailySidebar.js` + `components/TaskRow.js` are LIVE:
-  add / complete (sets completed_at) / skip / undo, all persisting to Supabase.
-  Verified end-to-end in a browser. Starter CSS replaced with minimal light reset.
+- `lib/supabaseClient.js` — shared anon client.
+- `lib/data.js` — single data-access layer: fetch(ForDate), createOneOffTask,
+  setInstanceStatus, deleteInstance, createRecurringTask, and the edit semantics
+  updateOneOff / overrideInstance / updateTemplateAll / splitTemplate. All
+  verified live with cleanup.
+- `lib/dates.js` (todayStr, humanDate, addDays) + `lib/rrulePresets.js`
+  (buildRRule/describeRRule for daily/weekly/biweekly/monthly).
 
-**Stubbed / next (Step 2 remaining):**
-- Board view (group by status) — placeholder only.
-- Calendar view (group by scheduled_date) — placeholder only.
-- Recurring-task create UI + the "this / this+future / all" edit modal (2g).
-- Sidebar currently creates one-off tasks only; recurring create UI not built yet.
+**Works — full UI (all verified end-to-end in a browser):**
+- App shell `pages/index.js`: tabs (Board/Calendar) + persistent daily sidebar,
+  wrapped in `RefreshContext` so any mutation refreshes all views live.
+- Daily sidebar: quick one-off add, complete/skip/undo, "New recurring task"
+  button, and click-a-title to open the edit modal.
+- Board (`BoardView`/`BoardCard`): group by status, 28-day window, click-to-move.
+- Calendar (`CalendarView`): month grid, prev/today/next, click-to-toggle done.
+- `RecurringCreateModal`: preset recurrence + weekday picker + live RRULE preview.
+- `EditModal`: one-off (edit fields/date + delete); recurring three-way scope
+  (this occurrence = override, this+future = split, all = update template).
 
-**Known gaps:**
+**Known gaps / next:**
+- Editing the recurrence RULE (frequency/days) from the EditModal isn't wired yet
+  — only title/description/scope. The data layer already supports it
+  (updateTemplateAll/splitTemplate accept `recurrenceRule`).
+- Edit modal opens from the SIDEBAR only (per chosen scope). Board/Calendar cards
+  quick-toggle status but don't open edit yet.
+- No delete/end for a whole recurring series (only per-occurrence skip/override).
 - RLS disabled on both tables (intentional per Auth section; anon key = full DB
   access — revisit before any sharing).
 - Vercel needs the two `NEXT_PUBLIC_SUPABASE_*` env vars set in project settings

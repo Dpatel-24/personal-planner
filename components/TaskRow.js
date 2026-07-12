@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { color, space, radius, font } from '@/lib/tokens';
 import { buttonGhost } from '@/lib/components';
 
-export default function TaskRow({ instance, onSetStatus }) {
+export default function TaskRow({ instance, onSetStatus, onEdit }) {
   const [busy, setBusy] = useState(false);
   const done = instance.status === 'done';
   const skipped = instance.status === 'skipped';
@@ -32,6 +32,7 @@ export default function TaskRow({ instance, onSetStatus }) {
     fontSize: font.size.md,
     color: done || skipped ? color.textMuted : color.text,
     textDecoration: done ? 'line-through' : 'none',
+    cursor: onEdit ? 'pointer' : 'default',
   };
 
   const badge = {
@@ -52,7 +53,7 @@ export default function TaskRow({ instance, onSetStatus }) {
         onChange={() => act(done ? 'todo' : 'done')}
         aria-label={done ? 'Mark not done' : 'Mark done'}
       />
-      <span style={titleStyle}>
+      <span style={titleStyle} onClick={onEdit ? () => onEdit(instance) : undefined} title={onEdit ? 'Edit' : undefined}>
         {instance.title || '(untitled)'}
         {instance.template_id && <span style={badge}>recurring</span>}
         {skipped && <span style={{ ...badge, color: color.textMuted, background: color.bgMuted }}>skipped</span>}
