@@ -108,11 +108,28 @@ stubbed, what's a known gap. This is the handoff to the next session.
   (gitignored; anon/public key only — no service_role anywhere in the tree).
 - `npm run dev` boots clean (HTTP 200 on /).
 
-**Stubbed (empty, do not populate until Step 2):**
-- `lib/tokens.js`, `lib/components.js` — token architecture placeholders.
+### 2026-07-12 — Step 2 in progress (lib layer + daily sidebar slice)
+**Works:**
+- `lib/tokens.js` + `lib/components.js` populated (clean/minimal, light-only v1).
+- `lib/recurrence.js` — `expandOccurrences` + `reconcile` (guard-rule honored) +
+  `generateInstances(template, windowDays=90)`. 8/8 logic tests pass.
+- `lib/supabaseClient.js` — shared anon client, verified against live DB.
+- `lib/data.js` — single data-access layer: fetchInstances / fetchInstancesForDate
+  (resolves inherit-vs-override), createOneOffTask, setInstanceStatus,
+  deleteInstance, createRecurringTask. Verified live w/ cleanup.
+- `lib/dates.js` — local-day helpers (todayStr, humanDate).
+- App shell (`pages/index.js`): tabs (Board/Calendar placeholders) + persistent
+  daily sidebar. `components/DailySidebar.js` + `components/TaskRow.js` are LIVE:
+  add / complete (sets completed_at) / skip / undo, all persisting to Supabase.
+  Verified end-to-end in a browser. Starter CSS replaced with minimal light reset.
 
-**Known gaps / next:**
-- No UI, views, or `lib/recurrence.js` yet — that's Step 2 onward.
+**Stubbed / next (Step 2 remaining):**
+- Board view (group by status) — placeholder only.
+- Calendar view (group by scheduled_date) — placeholder only.
+- Recurring-task create UI + the "this / this+future / all" edit modal (2g).
+- Sidebar currently creates one-off tasks only; recurring create UI not built yet.
+
+**Known gaps:**
 - RLS disabled on both tables (intentional per Auth section; anon key = full DB
   access — revisit before any sharing).
 - Vercel needs the two `NEXT_PUBLIC_SUPABASE_*` env vars set in project settings
