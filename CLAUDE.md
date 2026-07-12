@@ -92,8 +92,32 @@ duplicates another view's query, stop, that's a sign the shared layer is wrong.
   month-end edge cases are a known failure class for custom date logic.
 
 ## Current state
-Not started. Update this section at the end of every working session — what
-works, what's stubbed, what's a known gap. This is the handoff to the next session.
+Update this section at the end of every working session — what works, what's
+stubbed, what's a known gap. This is the handoff to the next session.
+
+### 2026-07-12 — Scaffold complete (Step 1 of build plan)
+**Works:**
+- Repo live at github.com/Dpatel-24/personal-planner, connected to Vercel.
+- Next.js 16.2.10 Pages Router (JS, no Tailwind/ESLint/src, `@/*` alias). Note:
+  used `create-next-app@latest` (Next 16), not the "14" originally in Stack.
+- Deps installed: `@supabase/supabase-js` ^2.110.2, `rrule` ^2.8.1.
+- Supabase project `personal-planner` (ref `cohmqwgjgrqfbqpocopn`, us-east-2).
+  Locked schema migration applied — `task_templates` + `task_instances` with
+  indexes, FK, status check. Verified empty with correct columns.
+- `.env.local` holds `NEXT_PUBLIC_SUPABASE_URL` + `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  (gitignored; anon/public key only — no service_role anywhere in the tree).
+- `npm run dev` boots clean (HTTP 200 on /).
+
+**Stubbed (empty, do not populate until Step 2):**
+- `lib/tokens.js`, `lib/components.js` — token architecture placeholders.
+
+**Known gaps / next:**
+- No UI, views, or `lib/recurrence.js` yet — that's Step 2 onward.
+- RLS disabled on both tables (intentional per Auth section; anon key = full DB
+  access — revisit before any sharing).
+- Vercel needs the two `NEXT_PUBLIC_SUPABASE_*` env vars set in project settings
+  (`.env.local` is gitignored, so they are NOT deployed from the repo).
+- Stray `AGENTS.md` from create-next-app is committed; remove if unwanted.
 
 ## Execution discipline
 - One atomic change per step. If a step description has "and" in it, split it.
