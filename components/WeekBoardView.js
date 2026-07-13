@@ -248,6 +248,7 @@ export default function WeekBoardView() {
               isInbox
               onToggleStatus={onToggleStatus}
               onEdit={setEditing}
+              onCreated={refresh}
             />
           </div>
 
@@ -266,6 +267,7 @@ export default function WeekBoardView() {
             </div>
             <div
               ref={daysScrollRef}
+              className="scrollbar-hidden"
               style={{ display: 'flex', gap: space[3], overflowX: 'auto', paddingBottom: space[2] }}
             >
               {week.map((d) => {
@@ -279,6 +281,7 @@ export default function WeekBoardView() {
                     isToday={dateStr === todayStr}
                     onToggleStatus={onToggleStatus}
                     onEdit={setEditing}
+                    onCreated={refresh}
                   />
                 );
               })}

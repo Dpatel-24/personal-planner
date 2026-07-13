@@ -9,6 +9,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { space, radius, border, font, color } from '@/lib/tokens';
 import { panel, textMuted } from '@/lib/components';
 import WeekBoardCard from './WeekBoardCard';
+import QuickAddCard from './QuickAddCard';
 
 export default function WeekBoardColumn({
   columnKey,
@@ -18,6 +19,7 @@ export default function WeekBoardColumn({
   isInbox = false,
   onToggleStatus,
   onEdit,
+  onCreated,
 }) {
   const { setNodeRef } = useDroppable({ id: columnKey, data: { columnKey } });
 
@@ -70,6 +72,7 @@ export default function WeekBoardColumn({
             ))
           )}
         </SortableContext>
+        <QuickAddCard scheduledDate={isInbox ? null : columnKey} onCreated={onCreated} />
       </div>
     </div>
   );
