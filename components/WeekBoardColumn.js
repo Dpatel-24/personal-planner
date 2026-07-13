@@ -1,13 +1,17 @@
 // WeekBoardColumn — a single column (Inbox or one day) in the week board.
-// isToday drives the accent header (CLAUDE.md v2 decision: today gets a
-// visually distinct header via tokens, no ad hoc colors). isInbox drives a
-// slightly different container treatment so it reads as structurally
-// separate from the Mon-Sun columns, also token-only.
+// Droppable (via useDroppable, so an EMPTY column is still a valid drop
+// target) and its card list is a dnd-kit SortableContext for within-column
+// reordering. isToday drives the accent header (CLAUDE.md v2 decision: today
+// gets a visually distinct header via tokens, no ad hoc colors). isInbox
+// drives a slightly different container treatment, also token-only.
+import { useDroppable } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { space, radius, border, font, color } from '@/lib/tokens';
 import { panel, textMuted } from '@/lib/components';
 import WeekBoardCard from './WeekBoardCard';
 
 export default function WeekBoardColumn({
+  columnKey,
   title,
   items,
   isToday = false,
@@ -15,6 +19,8 @@ export default function WeekBoardColumn({
   onToggleStatus,
   onEdit,
 }) {
+  const { setNodeRef } = useDroppable({ id: columnKey, data: { columnKey } });
+
   const columnStyle = {
     ...panel,
     width: 220,
@@ -40,20 +46,30 @@ export default function WeekBoardColumn({
     color: isToday ? color.accent : color.text,
   };
 
+  const itemIds = items.map((i) => i.id);
+
   return (
     <div style={columnStyle}>
       <div style={headerStyle}>
         <span style={titleStyle}>{title}</span>
         <span style={{ ...textMuted, fontSize: font.size.xs }}>{items.length}</span>
       </div>
-      <div style={{ padding: space[2] }}>
-        {items.length === 0 ? (
-          <div style={{ ...textMuted, fontSize: font.size.xs, padding: space[1] }}>Nothing here.</div>
-        ) : (
-          items.map((i) => (
-            <WeekBoardCard key={i.id} instance={i} onToggleStatus={onToggleStatus} onEdit={onEdit} />
-          ))
-        )}
+      <div ref={setNodeRef} style={{ padding: space[2], minHeight: 48 }}>
+        <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
+          {items.length === 0 ? (
+            <div style={{ ...textMuted, fontSize: font.size.xs, padding: space[1] }}>Nothing here.</div>
+          ) : (
+            items.map((i) => (
+              <WeekBoardCard
+                key={i.id}
+                instance={i}
+                columnKey={columnKey}
+                onToggleStatus={onToggleStatus}
+                onEdit={onEdit}
+              />
+            ))
+          )}
+        </SortableContext>
       </div>
     </div>
   );

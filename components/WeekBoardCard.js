@@ -1,16 +1,28 @@
-// WeekBoardCard — one task_instance in a week-board column. Layout/rendering
-// only: title + description, a checkbox reflecting status, and a "carried
-// over" badge when is_overdue is true (computed in lib/board-queries.js, not
-// a DB column). No drag yet. Clicking the card opens the v1 edit flow
-// (EditModal, via the onEdit callback) — the checkbox stops that click so it
-// can toggle status independently.
+// WeekBoardCard — one task_instance in a week-board column. Draggable via
+// @dnd-kit/sortable for all cards (including recurring non-override — they
+// must LOOK draggable per spec), but only eligible cards persist on drop; see
+// WeekBoardView's handleDragEnd for the eligibility check. Title + description,
+// a checkbox reflecting status, and a "carried over" badge when is_overdue is
+// true (computed in lib/board-queries.js, not a DB column).
+//
+// Click vs. drag: the DndContext's PointerSensor uses an activation distance
+// (see WeekBoardView), so a plain click (no movement) never starts a drag and
+// still opens the v1 edit flow; only the checkbox stops propagation so it can
+// toggle status independently of that click.
 import { useState } from 'react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { color, space, radius, font } from '@/lib/tokens';
 import { card as cardStyle } from '@/lib/components';
 
-export default function WeekBoardCard({ instance, onToggleStatus, onEdit }) {
+export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onEdit }) {
   const [busy, setBusy] = useState(false);
   const done = instance.status === 'done';
+
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: instance.id,
+    data: { columnKey, instance },
+  });
 
   const toggle = async (e) => {
     e.stopPropagation();
@@ -34,14 +46,19 @@ export default function WeekBoardCard({ instance, onToggleStatus, onEdit }) {
 
   return (
     <div
+      ref={setNodeRef}
       onClick={() => onEdit(instance)}
       style={{
         ...cardStyle,
         padding: space[3],
         marginBottom: space[2],
-        opacity: busy ? 0.5 : 1,
-        cursor: 'pointer',
+        cursor: 'grab',
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.4 : busy ? 0.5 : 1,
       }}
+      {...attributes}
+      {...listeners}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: space[2] }}>
         <input
@@ -50,6 +67,7 @@ export default function WeekBoardCard({ instance, onToggleStatus, onEdit }) {
           disabled={busy}
           onChange={toggle}
           onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
           style={{ marginTop: 3, flexShrink: 0 }}
           aria-label={done ? 'Mark not done' : 'Mark done'}
         />
