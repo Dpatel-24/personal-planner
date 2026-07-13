@@ -33,8 +33,16 @@ export default function Home() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      <div style={{ display: 'flex', minHeight: '100vh' }}>
-        <main style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+        <main
+          style={{
+            flex: 1,
+            minWidth: 0,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
           <header
             style={{
               display: 'flex',
@@ -43,6 +51,7 @@ export default function Home() {
               padding: `${space[3]} ${space[6]}`,
               borderBottom: border.default,
               background: color.bg,
+              flexShrink: 0,
             }}
           >
             <div style={{ ...heading, fontSize: font.size.lg }}>Planner</div>
@@ -54,7 +63,15 @@ export default function Home() {
               ))}
             </nav>
           </header>
-          <section style={{ flex: 1, padding: space[6] }}>
+          <section
+            style={{
+              flex: 1,
+              minHeight: 0,
+              padding: space[6],
+              overflowY: 'auto',
+              overflowX: 'hidden',
+            }}
+          >
             {tab === 'Board' ? <WeekBoardView /> : <CalendarView />}
           </section>
         </main>

@@ -15,7 +15,7 @@
 // Clicking a card (no pointer movement) still opens the same EditModal the
 // sidebar uses (the v1 edit flow) — see the PointerSensor's activation
 // distance below and WeekBoardCard's click/drag split.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -33,6 +33,8 @@ import WeekBoardColumn from './WeekBoardColumn';
 import EditModal from './EditModal';
 
 const INBOX_KEY = 'inbox';
+const DAY_COLUMN_WIDTH = 220;
+const COLUMN_GAP = 12; // px, matches space[3] used between columns
 
 function toDateStr(date) {
   const y = date.getFullYear();
@@ -118,6 +120,17 @@ export default function WeekBoardView() {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   );
 
+  // The 7 day-columns live in their own scroll region (Inbox stays pinned,
+  // static, to its left) — a standard laptop width can't fit all 7 at once
+  // alongside Inbox and the sidebar, so this lets you page through them.
+  const daysScrollRef = useRef(null);
+  const scrollDays = (direction) => {
+    daysScrollRef.current?.scrollBy({
+      left: direction * (DAY_COLUMN_WIDTH + COLUMN_GAP),
+      behavior: 'smooth',
+    });
+  };
+
   const handleDragEnd = async (event) => {
     const { active, over } = event;
     if (!over) return;
@@ -194,6 +207,12 @@ export default function WeekBoardView() {
   };
 
   const navBtn = { ...buttonSecondary, padding: `${space[1]} ${space[3]}` };
+  const dayScrollBtn = {
+    ...buttonSecondary,
+    padding: `${space[1]} ${space[2]}`,
+    fontWeight: font.weight.semibold,
+    lineHeight: font.lineHeight.tight,
+  };
 
   if (loading) return <div style={textMuted}>Loading…</div>;
 
@@ -219,29 +238,52 @@ export default function WeekBoardView() {
       {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
 
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-        <div style={{ display: 'flex', gap: space[3], overflowX: 'auto', paddingBottom: space[2] }}>
-          <WeekBoardColumn
-            columnKey={INBOX_KEY}
-            title="Inbox"
-            items={itemsByColumn[INBOX_KEY] || []}
-            isInbox
-            onToggleStatus={onToggleStatus}
-            onEdit={setEditing}
-          />
-          {week.map((d) => {
-            const dateStr = toDateStr(d);
-            return (
-              <WeekBoardColumn
-                key={dateStr}
-                columnKey={dateStr}
-                title={dayHeaderLabel(d)}
-                items={itemsByColumn[dateStr] || []}
-                isToday={dateStr === todayStr}
-                onToggleStatus={onToggleStatus}
-                onEdit={setEditing}
-              />
-            );
-          })}
+        <div style={{ display: 'flex', gap: space[3], alignItems: 'flex-start', minWidth: 0 }}>
+          {/* Inbox stays static (not part of the horizontal scroll region). */}
+          <div style={{ flexShrink: 0 }}>
+            <WeekBoardColumn
+              columnKey={INBOX_KEY}
+              title="Inbox"
+              items={itemsByColumn[INBOX_KEY] || []}
+              isInbox
+              onToggleStatus={onToggleStatus}
+              onEdit={setEditing}
+            />
+          </div>
+
+          {/* The 7 day columns scroll left/right within this region. */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: space[2], marginBottom: space[2] }}>
+              <button style={dayScrollBtn} onClick={() => scrollDays(-1)} aria-label="Scroll days left">
+                ‹
+              </button>
+              <span style={{ fontSize: font.size.sm, fontWeight: font.weight.medium, color: color.textMuted }}>
+                Week
+              </span>
+              <button style={dayScrollBtn} onClick={() => scrollDays(1)} aria-label="Scroll days right">
+                ›
+              </button>
+            </div>
+            <div
+              ref={daysScrollRef}
+              style={{ display: 'flex', gap: space[3], overflowX: 'auto', paddingBottom: space[2] }}
+            >
+              {week.map((d) => {
+                const dateStr = toDateStr(d);
+                return (
+                  <WeekBoardColumn
+                    key={dateStr}
+                    columnKey={dateStr}
+                    title={dayHeaderLabel(d)}
+                    items={itemsByColumn[dateStr] || []}
+                    isToday={dateStr === todayStr}
+                    onToggleStatus={onToggleStatus}
+                    onEdit={setEditing}
+                  />
+                );
+              })}
+            </div>
+          </div>
         </div>
       </DndContext>
 
