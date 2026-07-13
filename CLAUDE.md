@@ -90,6 +90,18 @@ duplicates another view's query, stop, that's a sign the shared layer is wrong.
   Reason: per-occurrence state (done/skip/override) needs a real row to attach to.
 - [date] Chose rrule.js over hand-rolled recurrence math. Reason: DST and
   month-end edge cases are a known failure class for custom date logic.
+- [2026-07-12] scheduled_date made nullable on task_instances. Reason: Inbox
+  tasks have no date until dragged onto a day.
+- [2026-07-12] Rollover for incomplete tasks implemented as a computed view
+  (today's query includes scheduled_date < today AND status='todo'), not a
+  data mutation or cron job. Reason: mutating scheduled_date would corrupt
+  recurring instance history and could collide with that series' next
+  natural occurrence.
+- [2026-07-12] Dragging a recurring instance to a new day routes through the
+  existing this/this+future/all modal, same as any other edit. Reason: one
+  edit pathway, not two.
+- [2026-07-12] Card model stays minimal: title + description only. No labels,
+  checklists, or time estimates in this pass.
 
 ## Current state
 Update this section at the end of every working session — what works, what's
