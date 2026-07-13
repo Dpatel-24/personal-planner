@@ -19,6 +19,7 @@ export default function CalendarDayCell({
   isLastRow,
   isLastCol,
   onToggleStatus,
+  onEdit,
 }) {
   const { setNodeRef } = useDroppable({ id: dateStr, data: { columnKey: dateStr } });
   const visible = items.slice(0, VISIBLE_LIMIT);
@@ -53,7 +54,13 @@ export default function CalendarDayCell({
       </div>
       <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
         {visible.map((t) => (
-          <CalendarChip key={t.id} instance={t} columnKey={dateStr} onToggleStatus={onToggleStatus} />
+          <CalendarChip
+            key={t.id}
+            instance={t}
+            columnKey={dateStr}
+            onToggleStatus={onToggleStatus}
+            onEdit={onEdit}
+          />
         ))}
       </SortableContext>
       {items.length > VISIBLE_LIMIT && (

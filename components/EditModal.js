@@ -34,6 +34,7 @@ export default function EditModal({ instance, onClose, onSaved }) {
   const [title, setTitle] = useState(instance.title || '');
   const [description, setDescription] = useState(instance.description || '');
   const [scheduledDate, setScheduledDate] = useState(instance.scheduled_date);
+  const [tag, setTag] = useState(instance.tag || '');
   const [scope, setScope] = useState('single');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -47,7 +48,11 @@ export default function EditModal({ instance, onClose, onSaved }) {
     setBusy(true);
     setError(null);
     try {
-      const fields = { title: title.trim(), description: description.trim() };
+      const fields = {
+        title: title.trim(),
+        description: description.trim(),
+        tag: tag.trim() || null,
+      };
       if (!isRecurring) {
         await updateOneOff(instance.id, { ...fields, scheduledDate });
       } else if (scope === 'single') {
@@ -97,6 +102,16 @@ export default function EditModal({ instance, onClose, onSaved }) {
         <div style={field}>
           <label style={labelStyle}>Description (optional)</label>
           <input style={inputStyle} value={description} onChange={(e) => setDescription(e.target.value)} />
+        </div>
+
+        <div style={field}>
+          <label style={labelStyle}>Tag (optional)</label>
+          <input
+            style={inputStyle}
+            placeholder="e.g. Work"
+            value={tag}
+            onChange={(e) => setTag(e.target.value)}
+          />
         </div>
 
         {!isRecurring && (

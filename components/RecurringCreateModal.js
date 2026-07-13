@@ -31,6 +31,7 @@ export default function RecurringCreateModal({ onClose, onCreated }) {
   const [freq, setFreq] = useState('weekly');
   const [weekdays, setWeekdays] = useState([]);
   const [endDate, setEndDate] = useState('');
+  const [tag, setTag] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -59,6 +60,7 @@ export default function RecurringCreateModal({ onClose, onCreated }) {
         recurrenceRule: rule,
         startDate,
         endDate: endDate || null,
+        tag: tag.trim() || null,
       });
       onCreated();
       onClose();
@@ -128,6 +130,16 @@ export default function RecurringCreateModal({ onClose, onCreated }) {
         <div style={field}>
           <label style={labelStyle}>Ends (optional)</label>
           <input style={inputStyle} type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+        </div>
+
+        <div style={field}>
+          <label style={labelStyle}>Tag (optional)</label>
+          <input
+            style={inputStyle}
+            placeholder="e.g. Work"
+            value={tag}
+            onChange={(e) => setTag(e.target.value)}
+          />
         </div>
 
         {rule && (

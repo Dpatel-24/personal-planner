@@ -1,10 +1,12 @@
 // CalendarView — month grid that GROUPS the shared instances by scheduled_date
-// (CLAUDE.md: calendar = group by scheduled_date). Prev/next/today nav. Click
-// a chip to toggle done/todo. Drag a chip to a new day to reschedule it, or
-// reorder within a day — a SECOND DndContext over the exact same
-// lib/dragAndDrop.js logic WeekBoardView uses (see that module; the decision
-// logic is not duplicated here, only the key->items state shape and the grid
-// rendering are calendar-specific).
+// (CLAUDE.md: calendar = group by scheduled_date). Prev/next/today nav.
+// Click-to-edit matches the board: a chip's checkbox toggles done/todo, and
+// clicking the rest of the chip opens the same EditModal (v1 edit flow).
+// Drag a chip to a new day to reschedule it, or reorder within a day — a
+// SECOND DndContext over the exact same lib/dragAndDrop.js logic
+// WeekBoardView uses (see that module; the decision logic is not duplicated
+// here, only the key->items state shape and the grid rendering are
+// calendar-specific).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DndContext, closestCorners } from '@dnd-kit/core';
 import { fetchInstances, setInstanceStatus } from '@/lib/data';
@@ -14,6 +16,7 @@ import { color, space, radius, border, font } from '@/lib/tokens';
 import { buttonSecondary, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
 import CalendarDayCell from './CalendarDayCell';
+import EditModal from './EditModal';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const pad = (n) => String(n).padStart(2, '0');
@@ -42,6 +45,11 @@ export default function CalendarView() {
   });
   const [itemsByDate, setItemsByDate] = useState({});
   const [error, setError] = useState(null);
+  const [editing, setEditing] = useState(null);
+  // "Tagged only" filters what's RENDERED per day, not itemsByDate itself —
+  // drag-and-drop always operates on the full, untagged-inclusive state so
+  // hidden items never get lost or corrupted while the filter is on.
+  const [tagOnly, setTagOnly] = useState(false);
 
   const days = useMemo(() => buildGrid(year, month), [year, month]);
   const from = days[0];
@@ -110,6 +118,19 @@ export default function CalendarView() {
         <div style={{ fontSize: font.size.xl, fontWeight: font.weight.semibold, color: color.text }}>
           {monthLabel}
         </div>
+        <label
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: space[1],
+            fontSize: font.size.sm,
+            color: color.textMuted,
+            cursor: 'pointer',
+          }}
+        >
+          <input type="checkbox" checked={tagOnly} onChange={(e) => setTagOnly(e.target.checked)} />
+          Tagged only
+        </label>
         <div style={{ display: 'flex', gap: space[1], marginLeft: 'auto' }}>
           <button style={navBtn} onClick={() => shiftMonth(-1)}>
             Prev
@@ -152,6 +173,7 @@ export default function CalendarView() {
               const dayNum = Number(day.split('-')[2]);
               const isLastRow = i >= days.length - 7;
               const isLastCol = i % 7 === 6;
+              const dayItems = itemsByDate[day] || [];
               return (
                 <CalendarDayCell
                   key={day}
@@ -159,16 +181,19 @@ export default function CalendarView() {
                   dayNum={dayNum}
                   inMonth={inMonth}
                   isToday={isToday}
-                  items={itemsByDate[day] || []}
+                  items={tagOnly ? dayItems.filter((i) => i.tag) : dayItems}
                   isLastRow={isLastRow}
                   isLastCol={isLastCol}
                   onToggleStatus={onToggleStatus}
+                  onEdit={setEditing}
                 />
               );
             })}
           </div>
         </div>
       </DndContext>
+
+      {editing && <EditModal instance={editing} onClose={() => setEditing(null)} onSaved={refresh} />}
     </div>
   );
 }
