@@ -9,7 +9,7 @@
 // calendar-specific).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DndContext, closestCorners } from '@dnd-kit/core';
-import { fetchInstances, setInstanceStatus } from '@/lib/data';
+import { fetchInstances, fetchDistinctTags, setInstanceStatus } from '@/lib/data';
 import { todayStr, addDays } from '@/lib/dates';
 import { useDragSensors, handleSharedDragEnd } from '@/lib/dragAndDrop';
 import { color, space, radius, border, font } from '@/lib/tokens';
@@ -17,6 +17,7 @@ import { buttonSecondary, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
 import CalendarDayCell from './CalendarDayCell';
 import EditModal from './EditModal';
+import TagFilterDropdown from './TagFilterDropdown';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const pad = (n) => String(n).padStart(2, '0');
@@ -46,10 +47,13 @@ export default function CalendarView() {
   const [itemsByDate, setItemsByDate] = useState({});
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null);
-  // "Tagged only" filters what's RENDERED per day, not itemsByDate itself —
-  // drag-and-drop always operates on the full, untagged-inclusive state so
-  // hidden items never get lost or corrupted while the filter is on.
-  const [tagOnly, setTagOnly] = useState(false);
+  // Tag filter: a SET of selected tag values (empty = no filtering). This
+  // filters what's RENDERED per day, not itemsByDate itself — drag-and-drop
+  // always operates on the full, unfiltered state so hidden items never get
+  // lost or corrupted while the filter is on. availableTags is the global
+  // list (across the whole DB, not just this month) for the dropdown.
+  const [selectedTags, setSelectedTags] = useState(() => new Set());
+  const [availableTags, setAvailableTags] = useState([]);
 
   const days = useMemo(() => buildGrid(year, month), [year, month]);
   const from = days[0];
@@ -75,6 +79,14 @@ export default function CalendarView() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Refetch the global tag list whenever data changes (version), so a
+  // newly-typed tag shows up in the dropdown without a full page reload.
+  useEffect(() => {
+    fetchDistinctTags()
+      .then(setAvailableTags)
+      .catch((e) => setError(e.message));
+  }, [version]);
 
   const onToggleStatus = async (id, status) => {
     try {
@@ -118,19 +130,7 @@ export default function CalendarView() {
         <div style={{ fontSize: font.size.xl, fontWeight: font.weight.semibold, color: color.text }}>
           {monthLabel}
         </div>
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: space[1],
-            fontSize: font.size.sm,
-            color: color.textMuted,
-            cursor: 'pointer',
-          }}
-        >
-          <input type="checkbox" checked={tagOnly} onChange={(e) => setTagOnly(e.target.checked)} />
-          Tagged only
-        </label>
+        <TagFilterDropdown tags={availableTags} selected={selectedTags} onChange={setSelectedTags} />
         <div style={{ display: 'flex', gap: space[1], marginLeft: 'auto' }}>
           <button style={navBtn} onClick={() => shiftMonth(-1)}>
             Prev
@@ -181,7 +181,11 @@ export default function CalendarView() {
                   dayNum={dayNum}
                   inMonth={inMonth}
                   isToday={isToday}
-                  items={tagOnly ? dayItems.filter((i) => i.tag) : dayItems}
+                  items={
+                    selectedTags.size > 0
+                      ? dayItems.filter((i) => i.tag && selectedTags.has(i.tag))
+                      : dayItems
+                  }
                   isLastRow={isLastRow}
                   isLastCol={isLastCol}
                   onToggleStatus={onToggleStatus}
