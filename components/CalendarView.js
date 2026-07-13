@@ -1,12 +1,19 @@
 // CalendarView — month grid that GROUPS the shared instances by scheduled_date
-// (CLAUDE.md: calendar = group by scheduled_date). Prev/next/today nav. Click a
-// task chip to toggle done/todo. Reschedule (drag/move) is deferred to 2g.
+// (CLAUDE.md: calendar = group by scheduled_date). Prev/next/today nav. Click
+// a chip to toggle done/todo. Drag a chip to a new day to reschedule it, or
+// reorder within a day — a SECOND DndContext over the exact same
+// lib/dragAndDrop.js logic WeekBoardView uses (see that module; the decision
+// logic is not duplicated here, only the key->items state shape and the grid
+// rendering are calendar-specific).
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { DndContext, closestCorners } from '@dnd-kit/core';
 import { fetchInstances, setInstanceStatus } from '@/lib/data';
 import { todayStr, addDays } from '@/lib/dates';
+import { useDragSensors, handleSharedDragEnd } from '@/lib/dragAndDrop';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { buttonSecondary, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
+import CalendarDayCell from './CalendarDayCell';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const pad = (n) => String(n).padStart(2, '0');
@@ -20,6 +27,12 @@ function buildGrid(year, month) {
   return Array.from({ length: totalCells }, (_, i) => addDays(gridStart, i));
 }
 
+// Calendar keys are always plain date strings — no Inbox equivalent, so this
+// is the identity function (the board's version maps its Inbox key to null).
+function keyToScheduledDate(key) {
+  return key;
+}
+
 export default function CalendarView() {
   const { version, refresh } = useRefresh();
   const today = todayStr();
@@ -27,7 +40,7 @@ export default function CalendarView() {
     const now = new Date();
     return { year: now.getFullYear(), month: now.getMonth() };
   });
-  const [instances, setInstances] = useState([]);
+  const [itemsByDate, setItemsByDate] = useState({});
   const [error, setError] = useState(null);
 
   const days = useMemo(() => buildGrid(year, month), [year, month]);
@@ -37,28 +50,27 @@ export default function CalendarView() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setInstances(await fetchInstances({ from, to }));
+      const instances = await fetchInstances({ from, to });
+      const next = {};
+      for (const inst of instances) {
+        if (!next[inst.scheduled_date]) next[inst.scheduled_date] = [];
+        next[inst.scheduled_date].push(inst);
+      }
+      setItemsByDate(next);
     } catch (e) {
       setError(e.message);
     }
+    // version triggers a refetch on any mutation from any view/sidebar.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from, to, version]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const byDate = useMemo(() => {
-    const m = new Map();
-    for (const inst of instances) {
-      if (!m.has(inst.scheduled_date)) m.set(inst.scheduled_date, []);
-      m.get(inst.scheduled_date).push(inst);
-    }
-    return m;
-  }, [instances]);
-
-  const toggle = async (inst) => {
+  const onToggleStatus = async (id, status) => {
     try {
-      await setInstanceStatus(inst.id, inst.status === 'done' ? 'todo' : 'done');
+      await setInstanceStatus(id, status);
       refresh();
     } catch (e) {
       setError(e.message);
@@ -73,6 +85,17 @@ export default function CalendarView() {
     const now = new Date();
     setYm({ year: now.getFullYear(), month: now.getMonth() });
   };
+
+  const sensors = useDragSensors();
+  const handleDragEnd = (event) =>
+    handleSharedDragEnd({
+      event,
+      itemsByKey: itemsByDate,
+      keyToScheduledDate,
+      setItemsByKey: setItemsByDate,
+      refresh,
+      setError,
+    });
 
   const monthLabel = new Date(year, month, 1).toLocaleDateString(undefined, {
     month: 'long',
@@ -102,97 +125,50 @@ export default function CalendarView() {
 
       {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
 
-      <div style={{ border: border.default, borderRadius: radius.lg, overflow: 'hidden' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
-          {WEEKDAYS.map((w, i) => (
-            <div
-              key={w}
-              style={{
-                padding: space[2],
-                fontSize: font.size.xs,
-                fontWeight: font.weight.medium,
-                color: color.textMuted,
-                background: color.bgSubtle,
-                borderBottom: border.default,
-                borderRight: i < 6 ? border.default : border.none,
-                textAlign: 'center',
-              }}
-            >
-              {w}
-            </div>
-          ))}
-
-          {days.map((day, i) => {
-            const inMonth = Number(day.split('-')[1]) === month + 1;
-            const isToday = day === today;
-            const dayNum = Number(day.split('-')[2]);
-            const tasks = byDate.get(day) || [];
-            const isLastRow = i >= days.length - 7;
-            const isLastCol = i % 7 === 6;
-            return (
+      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+        <div style={{ border: border.default, borderRadius: radius.lg, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+            {WEEKDAYS.map((w, i) => (
               <div
-                key={day}
+                key={w}
                 style={{
-                  minHeight: 104,
-                  padding: space[1],
-                  background: inMonth ? color.bg : color.bgSubtle,
-                  borderBottom: isLastRow ? border.none : border.default,
-                  borderRight: isLastCol ? border.none : border.default,
+                  padding: space[2],
+                  fontSize: font.size.xs,
+                  fontWeight: font.weight.medium,
+                  color: color.textMuted,
+                  background: color.bgSubtle,
+                  borderBottom: border.default,
+                  borderRight: i < 6 ? border.default : border.none,
+                  textAlign: 'center',
                 }}
               >
-                <div
-                  style={{
-                    display: 'inline-block',
-                    minWidth: 20,
-                    textAlign: 'center',
-                    fontSize: font.size.xs,
-                    fontWeight: isToday ? font.weight.semibold : font.weight.normal,
-                    color: isToday ? color.white : inMonth ? color.text : color.textSubtle,
-                    background: isToday ? color.accent : 'transparent',
-                    borderRadius: radius.full,
-                    padding: `0 ${space[1]}`,
-                    marginBottom: space[1],
-                  }}
-                >
-                  {dayNum}
-                </div>
-                {tasks.slice(0, 3).map((t) => {
-                  const done = t.status === 'done';
-                  const skipped = t.status === 'skipped';
-                  return (
-                    <div
-                      key={t.id}
-                      onClick={() => toggle(t)}
-                      title={t.title || '(untitled)'}
-                      style={{
-                        fontSize: font.size.xs,
-                        color: done || skipped ? color.textMuted : color.text,
-                        textDecoration: done ? 'line-through' : 'none',
-                        fontStyle: skipped ? 'italic' : 'normal',
-                        background: color.bgMuted,
-                        borderRadius: radius.sm,
-                        padding: `1px ${space[1]}`,
-                        marginBottom: 2,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                      }}
-                    >
-                      {t.title || '(untitled)'}
-                    </div>
-                  );
-                })}
-                {tasks.length > 3 && (
-                  <div style={{ fontSize: font.size.xs, color: color.textMuted, paddingLeft: space[1] }}>
-                    +{tasks.length - 3} more
-                  </div>
-                )}
+                {w}
               </div>
-            );
-          })}
+            ))}
+
+            {days.map((day, i) => {
+              const inMonth = Number(day.split('-')[1]) === month + 1;
+              const isToday = day === today;
+              const dayNum = Number(day.split('-')[2]);
+              const isLastRow = i >= days.length - 7;
+              const isLastCol = i % 7 === 6;
+              return (
+                <CalendarDayCell
+                  key={day}
+                  dateStr={day}
+                  dayNum={dayNum}
+                  inMonth={inMonth}
+                  isToday={isToday}
+                  items={itemsByDate[day] || []}
+                  isLastRow={isLastRow}
+                  isLastCol={isLastCol}
+                  onToggleStatus={onToggleStatus}
+                />
+              );
+            })}
+          </div>
         </div>
-      </div>
+      </DndContext>
     </div>
   );
 }

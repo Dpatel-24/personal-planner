@@ -16,16 +16,10 @@
 // sidebar uses (the v1 edit flow) — see the PointerSensor's activation
 // distance below and WeekBoardCard's click/drag split.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  DndContext,
-  PointerSensor,
-  closestCorners,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import { arrayMove } from '@dnd-kit/sortable';
+import { DndContext, closestCorners } from '@dnd-kit/core';
 import { getWeekDates, getInboxInstances, getColumnInstances } from '@/lib/board-queries';
-import { setInstanceStatus, moveInstance } from '@/lib/data';
+import { setInstanceStatus } from '@/lib/data';
+import { useDragSensors, handleSharedDragEnd } from '@/lib/dragAndDrop';
 import { color, space, font } from '@/lib/tokens';
 import { buttonSecondary, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
@@ -54,11 +48,6 @@ function weekRangeLabel(week) {
   const start = week[0].toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   const end = week[6].toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   return `${start} – ${end}`;
-}
-
-// Reindex a column's items to sequential 0..n-1 positions.
-function reindex(list) {
-  return list.map((item, idx) => ({ ...item, position: idx }));
 }
 
 export default function WeekBoardView() {
@@ -116,9 +105,7 @@ export default function WeekBoardView() {
   };
   const goThisWeek = () => setRefDate(new Date());
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
-  );
+  const sensors = useDragSensors();
 
   // The 7 day-columns live in their own scroll region (Inbox stays pinned,
   // static, to its left) — a standard laptop width can't fit all 7 at once
@@ -131,80 +118,19 @@ export default function WeekBoardView() {
     });
   };
 
-  const handleDragEnd = async (event) => {
-    const { active, over } = event;
-    if (!over) return;
+  // Board's Inbox key maps to a null scheduled_date; every other key is
+  // already a date string. See lib/dragAndDrop.js for the shared logic.
+  const keyToScheduledDate = (key) => (key === INBOX_KEY ? null : key);
 
-    const activeInstance = active.data.current?.instance;
-    const sourceColumnKey = active.data.current?.columnKey;
-    const destColumnKey = over.data.current?.columnKey ?? String(over.id);
-    if (!activeInstance || !sourceColumnKey) return;
-
-    // Recurring, non-override: looks draggable, but drops need the
-    // this/this+future/all modal — not wired yet. No state or DB change.
-    const isRecurringNonOverride = !!activeInstance.template_id && !activeInstance.is_override;
-    if (isRecurringNonOverride) {
-      console.log('recurring drag: needs modal, wiring next step');
-      return;
-    }
-
-    const sourceList = [...(itemsByColumn[sourceColumnKey] || [])];
-    const sourceIndex = sourceList.findIndex((i) => i.id === active.id);
-    if (sourceIndex === -1) return;
-
-    let writes;
-    let nextState;
-
-    if (sourceColumnKey === destColumnKey) {
-      if (active.id === over.id) return; // dropped on itself, no-op
-      const overIndex = sourceList.findIndex((i) => i.id === over.id);
-      const targetIndex = overIndex === -1 ? sourceList.length - 1 : overIndex;
-      const reordered = reindex(arrayMove(sourceList, sourceIndex, targetIndex));
-      writes = reordered.map((item) => ({ id: item.id, patch: { position: item.position } }));
-      nextState = { ...itemsByColumn, [sourceColumnKey]: reordered };
-    } else {
-      const moved = sourceList[sourceIndex];
-      const remainingSource = reindex(sourceList.filter((i) => i.id !== active.id));
-
-      const destList = [...(itemsByColumn[destColumnKey] || [])];
-      const overIndex = destList.findIndex((i) => i.id === over.id);
-      const insertAt = overIndex === -1 ? destList.length : overIndex;
-      const movedScheduledDate = destColumnKey === INBOX_KEY ? null : destColumnKey;
-      const movedItem = { ...moved, scheduled_date: movedScheduledDate, is_overdue: false };
-      const newDest = [...destList];
-      newDest.splice(insertAt, 0, movedItem);
-      const reindexedDest = reindex(newDest);
-
-      writes = [
-        ...remainingSource.map((item) => ({ id: item.id, patch: { position: item.position } })),
-        ...reindexedDest.map((item) => ({
-          id: item.id,
-          patch:
-            item.id === movedItem.id
-              ? { position: item.position, scheduledDate: movedScheduledDate }
-              : { position: item.position },
-        })),
-      ];
-      nextState = {
-        ...itemsByColumn,
-        [sourceColumnKey]: remainingSource,
-        [destColumnKey]: reindexedDest,
-      };
-    }
-
-    // Optimistic UI update, then persist. Only after every write has actually
-    // completed do we call refresh() — which re-fetches from the DB and
-    // replaces this optimistic state with the true persisted state (or, on
-    // error, discards it and resyncs to what's really in the DB).
-    setItemsByColumn(nextState);
-    try {
-      await Promise.all(writes.map((w) => moveInstance(w.id, w.patch)));
-      refresh();
-    } catch (e) {
-      setError(e.message);
-      refresh();
-    }
-  };
+  const handleDragEnd = (event) =>
+    handleSharedDragEnd({
+      event,
+      itemsByKey: itemsByColumn,
+      keyToScheduledDate,
+      setItemsByKey: setItemsByColumn,
+      refresh,
+      setError,
+    });
 
   const navBtn = { ...buttonSecondary, padding: `${space[1]} ${space[3]}` };
   const dayScrollBtn = {
