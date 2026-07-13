@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { heading } from '@/lib/components';
 import DailySidebar from '@/components/DailySidebar';
-import BoardView from '@/components/BoardView';
+import WeekBoardView from '@/components/WeekBoardView';
 import CalendarView from '@/components/CalendarView';
 import { RefreshProvider } from '@/components/RefreshContext';
 
@@ -55,7 +55,7 @@ export default function Home() {
             </nav>
           </header>
           <section style={{ flex: 1, padding: space[6] }}>
-            {tab === 'Board' ? <BoardView /> : <CalendarView />}
+            {tab === 'Board' ? <WeekBoardView /> : <CalendarView />}
           </section>
         </main>
 
