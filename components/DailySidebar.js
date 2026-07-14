@@ -68,7 +68,10 @@ export default function DailySidebar() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    // height:100% (not 100vh) — this renders both in the desktop <aside>
+    // (which stretches to the row's 100vh) and inline as the mobile "Today"
+    // tab's content (where 100vh would overflow its flex-constrained parent).
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <div style={{ padding: space[4], borderBottom: border.default }}>
         <h2 style={heading}>Today</h2>
         <div style={{ ...textMuted, marginTop: space[1] }}>{humanDate(today)}</div>

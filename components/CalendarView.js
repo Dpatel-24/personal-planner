@@ -126,7 +126,15 @@ export default function CalendarView() {
 
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[3], marginBottom: space[4] }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: space[2],
+          marginBottom: space[4],
+        }}
+      >
         <div style={{ fontSize: font.size.xl, fontWeight: font.weight.semibold, color: color.text }}>
           {monthLabel}
         </div>
@@ -148,7 +156,11 @@ export default function CalendarView() {
 
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
         <div style={{ border: border.default, borderRadius: radius.lg, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+          {/* minmax(0, 1fr), not plain 1fr — a bare 1fr track won't shrink
+              below its content's min-content width, so on a narrow (phone)
+              screen the grid silently overflows and clips the last column
+              (Saturday) instead of actually compressing all 7 evenly. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))' }}>
             {WEEKDAYS.map((w, i) => (
               <div
                 key={w}

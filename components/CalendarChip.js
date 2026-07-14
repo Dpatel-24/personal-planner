@@ -43,6 +43,7 @@ export default function CalendarChip({ instance, columnKey, onToggleStatus, onEd
         padding: `1px ${space[1]}`,
         marginBottom: 2,
         cursor: busy ? 'default' : 'grab',
+        touchAction: 'none', // let dnd-kit own touch gestures on this chip
         opacity: isDragging ? 0.4 : busy ? 0.6 : 1,
         transform: CSS.Transform.toString(transform),
         transition,

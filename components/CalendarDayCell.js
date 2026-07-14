@@ -30,6 +30,8 @@ export default function CalendarDayCell({
       ref={setNodeRef}
       style={{
         minHeight: 104,
+        minWidth: 0,
+        overflow: 'hidden',
         padding: space[1],
         background: inMonth ? color.bg : color.bgSubtle,
         borderBottom: isLastRow ? border.none : border.default,

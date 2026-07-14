@@ -20,6 +20,7 @@ import { DndContext, closestCorners } from '@dnd-kit/core';
 import { getWeekDates, getInboxInstances, getColumnInstances } from '@/lib/board-queries';
 import { setInstanceStatus } from '@/lib/data';
 import { useDragSensors, handleSharedDragEnd } from '@/lib/dragAndDrop';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { color, space, font } from '@/lib/tokens';
 import { buttonSecondary, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
@@ -27,8 +28,6 @@ import WeekBoardColumn from './WeekBoardColumn';
 import EditModal from './EditModal';
 
 const INBOX_KEY = 'inbox';
-const DAY_COLUMN_WIDTH = 220;
-const COLUMN_GAP = 12; // px, matches space[3] used between columns
 
 function toDateStr(date) {
   const y = date.getFullYear();
@@ -106,16 +105,20 @@ export default function WeekBoardView() {
   const goThisWeek = () => setRefDate(new Date());
 
   const sensors = useDragSensors();
+  const isMobile = useIsMobile();
 
   // The 7 day-columns live in their own scroll region (Inbox stays pinned,
-  // static, to its left) — a standard laptop width can't fit all 7 at once
-  // alongside Inbox and the sidebar, so this lets you page through them.
+  // static, to its left on desktop — a standard laptop width can't fit all 7
+  // at once alongside Inbox and the sidebar, so this lets you page through
+  // them; on mobile Inbox joins the same scroll strip as the first card
+  // instead, since a pinned column plus a sliver of scrollable space doesn't
+  // work on a phone-width screen). Scroll amount is the container's own
+  // width, not a fixed pixel constant, so it's correct at any column width.
   const daysScrollRef = useRef(null);
   const scrollDays = (direction) => {
-    daysScrollRef.current?.scrollBy({
-      left: direction * (DAY_COLUMN_WIDTH + COLUMN_GAP),
-      behavior: 'smooth',
-    });
+    const el = daysScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: direction * el.clientWidth * 0.9, behavior: 'smooth' });
   };
 
   // Board's Inbox key maps to a null scheduled_date; every other key is
@@ -142,9 +145,29 @@ export default function WeekBoardView() {
 
   if (loading) return <div style={textMuted}>Loading…</div>;
 
+  const inboxColumn = (
+    <WeekBoardColumn
+      columnKey={INBOX_KEY}
+      title="Inbox"
+      items={itemsByColumn[INBOX_KEY] || []}
+      isInbox
+      onToggleStatus={onToggleStatus}
+      onEdit={setEditing}
+      onCreated={refresh}
+    />
+  );
+
   return (
     <div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: space[3], marginBottom: space[4] }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: space[2],
+          marginBottom: space[4],
+        }}
+      >
         <div style={{ fontSize: font.size.xl, fontWeight: font.weight.semibold, color: color.text }}>
           Week of {weekRangeLabel(week)}
         </div>
@@ -165,20 +188,12 @@ export default function WeekBoardView() {
 
       <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
         <div style={{ display: 'flex', gap: space[3], alignItems: 'flex-start', minWidth: 0 }}>
-          {/* Inbox stays static (not part of the horizontal scroll region). */}
-          <div style={{ flexShrink: 0 }}>
-            <WeekBoardColumn
-              columnKey={INBOX_KEY}
-              title="Inbox"
-              items={itemsByColumn[INBOX_KEY] || []}
-              isInbox
-              onToggleStatus={onToggleStatus}
-              onEdit={setEditing}
-              onCreated={refresh}
-            />
-          </div>
+          {/* Desktop: Inbox stays static, outside the horizontal scroll
+              region. Mobile: no room for a pinned column beside a sliver of
+              scroll space, so Inbox instead becomes the first card inside
+              the same scroll strip as the 7 days (see below). */}
+          {!isMobile && <div style={{ flexShrink: 0 }}>{inboxColumn}</div>}
 
-          {/* The 7 day columns scroll left/right within this region. */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: space[2], marginBottom: space[2] }}>
               <button style={dayScrollBtn} onClick={() => scrollDays(-1)} aria-label="Scroll days left">
@@ -196,6 +211,7 @@ export default function WeekBoardView() {
               className="scrollbar-hidden"
               style={{ display: 'flex', gap: space[3], overflowX: 'auto', paddingBottom: space[2] }}
             >
+              {isMobile && inboxColumn}
               {week.map((d) => {
                 const dateStr = toDateStr(d);
                 return (

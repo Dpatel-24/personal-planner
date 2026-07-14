@@ -1,18 +1,27 @@
 // App shell: main pane with view tabs (Board / Calendar) + persistent daily
-// sidebar.
+// sidebar on desktop. On mobile (<=768px, see lib/useIsMobile.js) the sidebar
+// can't fit beside main content (it's 340px wide on its own), so it becomes a
+// third "Today" tab instead — same DailySidebar component, just relocated.
 import Head from 'next/head';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { heading } from '@/lib/components';
 import DailySidebar from '@/components/DailySidebar';
 import WeekBoardView from '@/components/WeekBoardView';
 import CalendarView from '@/components/CalendarView';
 import { RefreshProvider } from '@/components/RefreshContext';
-
-const TABS = ['Board', 'Calendar'];
+import { useIsMobile } from '@/lib/useIsMobile';
 
 export default function Home() {
   const [tab, setTab] = useState('Board');
+  const isMobile = useIsMobile();
+  const tabs = isMobile ? ['Board', 'Calendar', 'Today'] : ['Board', 'Calendar'];
+
+  // If the window grows past the breakpoint while "Today" is active, that tab
+  // no longer exists (desktop shows the sidebar instead) — fall back to Board.
+  useEffect(() => {
+    if (!isMobile && tab === 'Today') setTab('Board');
+  }, [isMobile, tab]);
 
   const tabBtn = (active) => ({
     padding: `${space[1]} ${space[3]}`,
@@ -48,7 +57,9 @@ export default function Home() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
-              padding: `${space[3]} ${space[6]}`,
+              flexWrap: 'wrap',
+              gap: space[2],
+              padding: `${space[3]} ${isMobile ? space[4] : space[6]}`,
               borderBottom: border.default,
               background: color.bg,
               flexShrink: 0,
@@ -56,7 +67,7 @@ export default function Home() {
           >
             <div style={{ ...heading, fontSize: font.size.lg }}>Planner</div>
             <nav style={{ display: 'flex', gap: space[1] }}>
-              {TABS.map((t) => (
+              {tabs.map((t) => (
                 <button key={t} style={tabBtn(tab === t)} onClick={() => setTab(t)}>
                   {t}
                 </button>
@@ -67,25 +78,29 @@ export default function Home() {
             style={{
               flex: 1,
               minHeight: 0,
-              padding: space[6],
+              padding: isMobile ? space[3] : space[6],
               overflowY: 'auto',
               overflowX: 'hidden',
             }}
           >
-            {tab === 'Board' ? <WeekBoardView /> : <CalendarView />}
+            {tab === 'Board' && <WeekBoardView />}
+            {tab === 'Calendar' && <CalendarView />}
+            {tab === 'Today' && isMobile && <DailySidebar />}
           </section>
         </main>
 
-        <aside
-          style={{
-            width: 340,
-            flexShrink: 0,
-            borderLeft: border.default,
-            background: color.bg,
-          }}
-        >
-          <DailySidebar />
-        </aside>
+        {!isMobile && (
+          <aside
+            style={{
+              width: 340,
+              flexShrink: 0,
+              borderLeft: border.default,
+              background: color.bg,
+            }}
+          >
+            <DailySidebar />
+          </aside>
+        )}
       </div>
     </RefreshProvider>
   );

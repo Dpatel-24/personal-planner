@@ -53,6 +53,10 @@ export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onE
         padding: space[3],
         marginBottom: space[2],
         cursor: 'grab',
+        // Without this, touch-drag on mobile fights the browser's native
+        // scroll gesture instead of starting a dnd-kit drag — recommended by
+        // @dnd-kit for any sortable/draggable touch target.
+        touchAction: 'none',
         transform: CSS.Transform.toString(transform),
         transition,
         opacity: isDragging ? 0.4 : busy ? 0.5 : 1,

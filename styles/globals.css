@@ -42,3 +42,18 @@ a {
 .scrollbar-hidden::-webkit-scrollbar {
   display: none; /* Chrome, Safari, modern Edge */
 }
+
+/* WeekBoardColumn width — a media query is the only way to shrink this by
+   screen size; the value can't be conditional inline without threading a
+   viewport check through every column. Desktop keeps the original 220px;
+   on phone-width screens each column becomes ~85% of the viewport so it
+   reads as one swipeable card, matching lib/useIsMobile.js's breakpoint. */
+.week-column {
+  width: 220px;
+}
+@media (max-width: 768px) {
+  .week-column {
+    width: 85vw;
+    max-width: 320px;
+  }
+}

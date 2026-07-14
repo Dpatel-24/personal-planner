@@ -23,9 +23,11 @@ export default function WeekBoardColumn({
 }) {
   const { setNodeRef } = useDroppable({ id: columnKey, data: { columnKey } });
 
+  // Width comes from the .week-column CSS class (styles/globals.css), not an
+  // inline value — a media query there shrinks it on mobile so one column
+  // reads as a natural swipeable card instead of desktop's fixed 220px.
   const columnStyle = {
     ...panel,
-    width: 220,
     flexShrink: 0,
     padding: 0,
     background: isInbox ? color.bgMuted : color.bgSubtle,
@@ -51,7 +53,7 @@ export default function WeekBoardColumn({
   const itemIds = items.map((i) => i.id);
 
   return (
-    <div style={columnStyle}>
+    <div className="week-column" style={columnStyle}>
       <div style={headerStyle}>
         <span style={titleStyle}>{title}</span>
         <span style={{ ...textMuted, fontSize: font.size.xs }}>{items.length}</span>
