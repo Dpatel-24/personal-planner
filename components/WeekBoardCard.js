@@ -9,21 +9,23 @@
 // (see WeekBoardView), so a plain click (no movement) never starts a drag and
 // still opens the v1 edit flow; only the checkbox stops propagation so it can
 // toggle status independently of that click.
+//
+// No start-timer button here — that control lives in the sidebar (TaskRow.js)
+// only, since the sidebar is the "Today" control panel and every timeable
+// task passes through it. This card still shows the read-only total-tracked-
+// time (and colors it while timing) since that's informational, not a control.
 import { useEffect, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { color, space, radius, font } from '@/lib/tokens';
-import { card as cardStyle, buttonGhost } from '@/lib/components';
+import { card as cardStyle } from '@/lib/components';
 import { useTimer } from './TimerContext';
-import { useRefresh } from './RefreshContext';
-import { startTimer, formatDuration } from '@/lib/timer-queries';
+import { formatDuration } from '@/lib/timer-queries';
 
 export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onEdit }) {
   const [busy, setBusy] = useState(false);
-  const [timerBusy, setTimerBusy] = useState(false);
   const done = instance.status === 'done';
-  const { activeTimer, refreshTimer } = useTimer();
-  const { refresh } = useRefresh();
+  const { activeTimer } = useTimer();
   const isTiming = activeTimer?.instance_id === instance.id;
 
   // Re-render every second while THIS card's timer is the active one, so the
@@ -52,21 +54,6 @@ export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onE
       await onToggleStatus(instance.id, done ? 'todo' : 'done');
     } finally {
       setBusy(false);
-    }
-  };
-
-  const start = async (e) => {
-    e.stopPropagation();
-    setTimerBusy(true);
-    try {
-      await startTimer(instance.id);
-      refreshTimer();
-      // Starting a new timer finalizes whatever session was previously
-      // running (possibly on a DIFFERENT card) — nudge the board/calendar's
-      // own fetch so that other card's tracked_seconds total updates too.
-      refresh();
-    } finally {
-      setTimerBusy(false);
     }
   };
 
@@ -169,22 +156,6 @@ export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onE
           )}
           {instance.is_overdue && <span style={badge}>carried over</span>}
         </div>
-        <button
-          type="button"
-          onClick={start}
-          onPointerDown={(e) => e.stopPropagation()}
-          disabled={timerBusy || isTiming}
-          title={isTiming ? 'Timing…' : 'Start timer'}
-          style={{
-            ...buttonGhost,
-            padding: `0 ${space[1]}`,
-            fontSize: font.size.sm,
-            flexShrink: 0,
-            color: isTiming ? color.accent : color.textMuted,
-          }}
-        >
-          {isTiming ? '⏱' : '▶'}
-        </button>
       </div>
     </div>
   );

@@ -301,9 +301,10 @@ logic lives once in `lib/dragAndDrop.js`, imported by both Board and Calendar.
   showing running task + live elapsed counter + Stop) lives in the app shell
   (`pages/index.js`, above the Board/Calendar tab switch) so it survives
   navigating between views — this is the one thing in the app that must be
-  visible outside any single view. Start buttons live on the card face
-  (`WeekBoardCard.js`, `CalendarChip.js`); Stop only lives on the bar, not
-  per-card, since there's only ever one thing to stop.
+  visible outside any single view. Stop only lives on the bar, not per-card,
+  since there's only ever one thing to stop. (Start buttons originally also
+  lived on the Board/Calendar card faces — see the 2026-07-14 entry below
+  for why that was moved.)
 - [2026-07-14] Added a per-instance total-tracked-time display on the card
   face (`WeekBoardCard.js`/`CalendarChip.js`), summing that instance's
   completed `time_entries` rows plus live elapsed time if it's the currently
@@ -316,8 +317,14 @@ logic lives once in `lib/dragAndDrop.js`, imported by both Board and Calendar.
   `refreshTimer()`. Verified: two separate start/stop sessions (17s + 27s)
   summed to the correct combined total (44s) on the card face, confirmed
   against a direct `sum(ended_at - started_at)` query.
-
-## Current state
+- [2026-07-14] Moved the start-timer button off the Board/Calendar card faces
+  (`WeekBoardCard.js`/`CalendarChip.js`) onto `TaskRow.js` (the sidebar's
+  daily list) exclusively. Reason: explicit ask — the sidebar is the "Today"
+  control panel; every task worth timing passes through it, so the control
+  belongs there rather than duplicated across every view's card. The cards
+  keep their read-only total-tracked-time display (still colored/ticking
+  live while that instance is the active timer) — only the ▶ control moved,
+  not the informational display.
 Update this section at the end of every working session — what works, what's
 stubbed, what's a known gap. This is the handoff to the next session.
 
@@ -335,21 +342,22 @@ app shell/layout, not just card components.
   nothing active).
 - New `components/TimerContext.js`: single polled source of truth for the
   active timer, provided in `pages/index.js` above both views, consumed by
-  `TimerBar.js` and by the card components' start buttons so they always
-  agree on what's running.
+  `TimerBar.js` and by `TaskRow.js`'s start button so they always agree on
+  what's running.
 - New `components/TimerBar.js`: renders nothing when idle; otherwise the
   running task's title, a live elapsed counter (ticks locally off
   `started_at`, no polling needed for the tick), and Stop. Mounted in
   `pages/index.js` between the header and the Board/Calendar `section` —
   outside `WeekBoardView`/`CalendarView`, so it survives tab switches.
-- `WeekBoardCard.js`/`CalendarChip.js`: a start button (▶, becomes a
-  disabled ⏱ if that card's instance is the one currently running), plus a
-  total-tracked-time display (sum of completed `time_entries` for that
-  instance + live elapsed if it's the active timer) — see the follow-up
-  Decisions log entry for the `RefreshContext` staleness bug this caught.
+- Start control lives ONLY in `TaskRow.js` (the sidebar's daily list) — moved
+  there from the Board/Calendar card faces per the 2026-07-14 Decisions log
+  entry (sidebar = the "Today" control panel). `WeekBoardCard.js`/
+  `CalendarChip.js` keep a read-only total-tracked-time display (sum of
+  completed `time_entries` for that instance + live elapsed if it's the
+  active timer, colored/ticking while running) but no button.
   `lib/timer-queries.js`'s `formatDuration()` is the one shared H:MM:SS
-  formatter used by both the bar and the card total, extracted out of
-  `TimerBar.js` rather than duplicated.
+  formatter used by the bar, the cards, and (implicitly) anywhere else this
+  is displayed — extracted out of `TimerBar.js` rather than duplicated.
 - Verified live: started a timer on Task A, navigated Board → Calendar, the
   bar kept counting and showing Task A the whole time; started Task B
   without stopping A first — A's `time_entries` row got `ended_at` set
