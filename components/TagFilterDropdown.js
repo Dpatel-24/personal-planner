@@ -1,4 +1,5 @@
-// TagFilterDropdown — multi-select dropdown of distinct tag values. Zero
+// TagFilterDropdown — multi-select dropdown over the V3 `tags` table (each
+// tag is {id, name, color}; `selected` is a Set of tag ids, not names). Zero
 // selected = no filtering (show everything); one or more selected = show
 // tasks matching ANY selected tag. Closes on an outside click; stays open
 // while checking boxes (standard multi-select behavior).
@@ -18,10 +19,10 @@ export default function TagFilterDropdown({ tags, selected, onChange }) {
     return () => document.removeEventListener('mousedown', onDocMouseDown);
   }, []);
 
-  const toggleTag = (tag) => {
+  const toggleTag = (tagId) => {
     const next = new Set(selected);
-    if (next.has(tag)) next.delete(tag);
-    else next.add(tag);
+    if (next.has(tagId)) next.delete(tagId);
+    else next.add(tagId);
     onChange(next);
   };
 
@@ -55,7 +56,7 @@ export default function TagFilterDropdown({ tags, selected, onChange }) {
           ) : (
             tags.map((tag) => (
               <label
-                key={tag}
+                key={tag.id}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -66,8 +67,19 @@ export default function TagFilterDropdown({ tags, selected, onChange }) {
                   cursor: 'pointer',
                 }}
               >
-                <input type="checkbox" checked={selected.has(tag)} onChange={() => toggleTag(tag)} />
-                {tag}
+                <input type="checkbox" checked={selected.has(tag.id)} onChange={() => toggleTag(tag.id)} />
+                {tag.color && (
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: radius.full,
+                      background: tag.color,
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                {tag.name}
               </label>
             ))
           )}

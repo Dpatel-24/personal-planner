@@ -1,6 +1,7 @@
 // RecurringCreateModal — preset-based recurring task creation (no raw RRULE).
 import { useState } from 'react';
 import Modal from './Modal';
+import TagPicker from './TagPicker';
 import { createRecurringTask } from '@/lib/data';
 import { buildRRule, describeRRule, FREQUENCIES } from '@/lib/rrulePresets';
 import { todayStr } from '@/lib/dates';
@@ -31,7 +32,7 @@ export default function RecurringCreateModal({ onClose, onCreated }) {
   const [freq, setFreq] = useState('weekly');
   const [weekdays, setWeekdays] = useState([]);
   const [endDate, setEndDate] = useState('');
-  const [tag, setTag] = useState('');
+  const [tagId, setTagId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -60,7 +61,7 @@ export default function RecurringCreateModal({ onClose, onCreated }) {
         recurrenceRule: rule,
         startDate,
         endDate: endDate || null,
-        tag: tag.trim() || null,
+        tagId,
       });
       onCreated();
       onClose();
@@ -133,13 +134,7 @@ export default function RecurringCreateModal({ onClose, onCreated }) {
         </div>
 
         <div style={field}>
-          <label style={labelStyle}>Tag (optional)</label>
-          <input
-            style={inputStyle}
-            placeholder="e.g. Work"
-            value={tag}
-            onChange={(e) => setTag(e.target.value)}
-          />
+          <TagPicker value={tagId} onChange={setTagId} />
         </div>
 
         {rule && (

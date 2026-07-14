@@ -9,7 +9,8 @@
 // calendar-specific).
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DndContext, closestCorners } from '@dnd-kit/core';
-import { fetchInstances, fetchDistinctTags, setInstanceStatus } from '@/lib/data';
+import { fetchInstances, setInstanceStatus } from '@/lib/data';
+import { getTags } from '@/lib/tag-queries';
 import { todayStr, addDays } from '@/lib/dates';
 import { useDragSensors, handleSharedDragEnd } from '@/lib/dragAndDrop';
 import { color, space, radius, border, font } from '@/lib/tokens';
@@ -47,11 +48,12 @@ export default function CalendarView() {
   const [itemsByDate, setItemsByDate] = useState({});
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null);
-  // Tag filter: a SET of selected tag values (empty = no filtering). This
+  // Tag filter: a SET of selected tag IDS (empty = no filtering). This
   // filters what's RENDERED per day, not itemsByDate itself — drag-and-drop
   // always operates on the full, unfiltered state so hidden items never get
   // lost or corrupted while the filter is on. availableTags is the global
-  // list (across the whole DB, not just this month) for the dropdown.
+  // list of tag rows (across the whole DB, not just this month) for the
+  // dropdown.
   const [selectedTags, setSelectedTags] = useState(() => new Set());
   const [availableTags, setAvailableTags] = useState([]);
 
@@ -81,9 +83,9 @@ export default function CalendarView() {
   }, [load]);
 
   // Refetch the global tag list whenever data changes (version), so a
-  // newly-typed tag shows up in the dropdown without a full page reload.
+  // newly-created tag shows up in the dropdown without a full page reload.
   useEffect(() => {
-    fetchDistinctTags()
+    getTags()
       .then(setAvailableTags)
       .catch((e) => setError(e.message));
   }, [version]);
@@ -195,7 +197,7 @@ export default function CalendarView() {
                   isToday={isToday}
                   items={
                     selectedTags.size > 0
-                      ? dayItems.filter((i) => i.tag && selectedTags.has(i.tag))
+                      ? dayItems.filter((i) => i.tag_id && selectedTags.has(i.tag_id))
                       : dayItems
                   }
                   isLastRow={isLastRow}

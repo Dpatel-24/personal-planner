@@ -4,6 +4,9 @@
 // already supports it (updateTemplateAll/splitTemplate accept recurrenceRule).
 import { useState } from 'react';
 import Modal from './Modal';
+import { InstanceTagSection, TemplateDefaultTagSection } from './TagAssignSection';
+import ChecklistSection from './ChecklistSection';
+import ChecklistTemplateSection from './ChecklistTemplateSection';
 import {
   updateOneOff,
   overrideInstance,
@@ -34,7 +37,6 @@ export default function EditModal({ instance, onClose, onSaved }) {
   const [title, setTitle] = useState(instance.title || '');
   const [description, setDescription] = useState(instance.description || '');
   const [scheduledDate, setScheduledDate] = useState(instance.scheduled_date);
-  const [tag, setTag] = useState(instance.tag || '');
   const [scope, setScope] = useState('single');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -51,7 +53,6 @@ export default function EditModal({ instance, onClose, onSaved }) {
       const fields = {
         title: title.trim(),
         description: description.trim(),
-        tag: tag.trim() || null,
       };
       if (!isRecurring) {
         await updateOneOff(instance.id, { ...fields, scheduledDate });
@@ -105,14 +106,27 @@ export default function EditModal({ instance, onClose, onSaved }) {
         </div>
 
         <div style={field}>
-          <label style={labelStyle}>Tag (optional)</label>
-          <input
-            style={inputStyle}
-            placeholder="e.g. Work"
-            value={tag}
-            onChange={(e) => setTag(e.target.value)}
-          />
+          <InstanceTagSection instanceId={instance.id} initialTagId={instance.tag_id} />
         </div>
+
+        {isRecurring && instance.template_id && (
+          <div style={field}>
+            <TemplateDefaultTagSection
+              templateId={instance.template_id}
+              initialTagId={instance.template?.defaultTagRow?.id}
+            />
+          </div>
+        )}
+
+        <div style={field}>
+          <ChecklistSection instanceId={instance.id} />
+        </div>
+
+        {isRecurring && instance.template_id && (
+          <div style={field}>
+            <ChecklistTemplateSection templateId={instance.template_id} />
+          </div>
+        )}
 
         {!isRecurring && (
           <div style={field}>

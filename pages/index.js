@@ -5,15 +5,19 @@
 import Head from 'next/head';
 import { useEffect, useState } from 'react';
 import { color, space, radius, border, font } from '@/lib/tokens';
-import { heading } from '@/lib/components';
+import { heading, buttonGhost } from '@/lib/components';
 import DailySidebar from '@/components/DailySidebar';
 import WeekBoardView from '@/components/WeekBoardView';
 import CalendarView from '@/components/CalendarView';
+import TagManagerModal from '@/components/TagManagerModal';
+import TimerBar from '@/components/TimerBar';
 import { RefreshProvider } from '@/components/RefreshContext';
+import { TimerProvider } from '@/components/TimerContext';
 import { useIsMobile } from '@/lib/useIsMobile';
 
 export default function Home() {
   const [tab, setTab] = useState('Board');
+  const [managingTags, setManagingTags] = useState(false);
   const isMobile = useIsMobile();
   const tabs = isMobile ? ['Board', 'Calendar', 'Today'] : ['Board', 'Calendar'];
 
@@ -37,71 +41,88 @@ export default function Home() {
 
   return (
     <RefreshProvider>
-      <Head>
-        <title>Planner</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link rel="icon" href="/favicon.ico" />
-      </Head>
-      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
-        <main
-          style={{
-            flex: 1,
-            minWidth: 0,
-            minHeight: 0,
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <header
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: space[2],
-              padding: `${space[3]} ${isMobile ? space[4] : space[6]}`,
-              borderBottom: border.default,
-              background: color.bg,
-              flexShrink: 0,
-            }}
-          >
-            <div style={{ ...heading, fontSize: font.size.lg }}>Planner</div>
-            <nav style={{ display: 'flex', gap: space[1] }}>
-              {tabs.map((t) => (
-                <button key={t} style={tabBtn(tab === t)} onClick={() => setTab(t)}>
-                  {t}
-                </button>
-              ))}
-            </nav>
-          </header>
-          <section
+      <TimerProvider>
+        <Head>
+          <title>Planner</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <link rel="icon" href="/favicon.ico" />
+        </Head>
+        <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+          <main
             style={{
               flex: 1,
+              minWidth: 0,
               minHeight: 0,
-              padding: isMobile ? space[3] : space[6],
-              overflowY: 'auto',
-              overflowX: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
             }}
           >
-            {tab === 'Board' && <WeekBoardView />}
-            {tab === 'Calendar' && <CalendarView />}
-            {tab === 'Today' && isMobile && <DailySidebar />}
-          </section>
-        </main>
+            <header
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: space[2],
+                padding: `${space[3]} ${isMobile ? space[4] : space[6]}`,
+                borderBottom: border.default,
+                background: color.bg,
+                flexShrink: 0,
+              }}
+            >
+              <div style={{ ...heading, fontSize: font.size.lg }}>Planner</div>
+              <nav style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
+                {tabs.map((t) => (
+                  <button key={t} style={tabBtn(tab === t)} onClick={() => setTab(t)}>
+                    {t}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  style={{ ...buttonGhost, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm }}
+                  onClick={() => setManagingTags(true)}
+                >
+                  Manage tags
+                </button>
+              </nav>
+            </header>
 
-        {!isMobile && (
-          <aside
-            style={{
-              width: 340,
-              flexShrink: 0,
-              borderLeft: border.default,
-              background: color.bg,
-            }}
-          >
-            <DailySidebar />
-          </aside>
-        )}
-      </div>
+            {/* Outside WeekBoardView/CalendarView on purpose — this stays
+                mounted across tab switches, so a running timer keeps
+                counting and stays visible no matter which view is active. */}
+            <TimerBar />
+
+            <section
+              style={{
+                flex: 1,
+                minHeight: 0,
+                padding: isMobile ? space[3] : space[6],
+                overflowY: 'auto',
+                overflowX: 'hidden',
+              }}
+            >
+              {tab === 'Board' && <WeekBoardView />}
+              {tab === 'Calendar' && <CalendarView />}
+              {tab === 'Today' && isMobile && <DailySidebar />}
+            </section>
+          </main>
+
+          {!isMobile && (
+            <aside
+              style={{
+                width: 340,
+                flexShrink: 0,
+                borderLeft: border.default,
+                background: color.bg,
+              }}
+            >
+              <DailySidebar />
+            </aside>
+          )}
+        </div>
+
+        {managingTags && <TagManagerModal onClose={() => setManagingTags(false)} />}
+      </TimerProvider>
     </RefreshProvider>
   );
 }
