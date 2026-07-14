@@ -325,8 +325,51 @@ logic lives once in `lib/dragAndDrop.js`, imported by both Board and Calendar.
   keep their read-only total-tracked-time display (still colored/ticking
   live while that instance is the active timer) — only the ▶ control moved,
   not the informational display.
+- [2026-07-14] Timer now stops automatically when its task is marked done
+  (`lib/timer-queries.js`'s `stopTimerForInstance(instanceId)`, called from
+  `lib/data.js`'s `setInstanceStatus` only when `status === 'done'`). Scoped
+  by `instance_id`, so it's a no-op unless the just-completed task IS the one
+  currently running — marking a DIFFERENT task done never touches an
+  unrelated active timer. The Stop button on `TimerBar.js` is unchanged and
+  still the only way to stop a timer for a task that ISN'T being completed.
+  `TimerContext` now also refetches on `RefreshContext`'s version bump (not
+  just its own `refreshTimer()`), so the bar/card icons update immediately
+  after a completion anywhere, without every call site needing to remember
+  both refreshes.
+- [2026-07-14] Sidebar's daily list (`TaskRow.js`/`DailySidebar.js`) is now
+  reorderable via the SAME shared `lib/dragAndDrop.js` module the board and
+  calendar use — not a reimplementation. The sidebar is a single-key group
+  (every row already has `scheduled_date = today`), so `DailySidebar.js`
+  wraps its flat `tasks` array as `{ [today]: tasks }` before handing it to
+  `handleSharedDragEnd`; `keyToScheduledDate` always returns `today` since
+  there's only one possible destination. Verified the reorder computation
+  and resulting `moveInstance` writes directly against `computeDragMove`
+  (correct: dragging the last row to the front reindexes everyone else to
+  0..n-1) — the actual browser drag gesture could not be verified end-to-end
+  in this session because dnd-kit's PointerSensor did not activate under
+  either raw synthetic `PointerEvent` dispatch or this sandbox's CDP-driven
+  mouse drag (confirmed the SAME failure on the already-shipped Board drag,
+  so this is a sandbox/automation limitation, not new-code-specific).
+  Flagging for the user's own manual pass.
+
+## Current state
 Update this section at the end of every working session — what works, what's
 stubbed, what's a known gap. This is the handoff to the next session.
+
+### v3 timer follow-ups (2026-07-14) — CODE COMPLETE, sidebar drag needs user's manual verification
+1. Timer auto-stops when its task is marked done, from anywhere (board,
+   calendar, or sidebar) — verified live: completed a running task via the
+   sidebar checkbox, `TimerBar` disappeared, DB row got `ended_at` set. The
+   Stop button on the bar still works independently for an incomplete task
+   (verified: started a timer, hit Stop, task stayed unchecked).
+2. Sidebar drag-to-reorder — code wired through the same shared
+   `lib/dragAndDrop.js` module as Board/Calendar, and the reorder
+   computation was verified directly (see Decisions log), but **the actual
+   drag gesture is unverified in-browser** — this sandbox's automation
+   couldn't activate dnd-kit's PointerSensor via either technique tried
+   (same failure reproduced on the pre-existing Board drag, so it's a tool
+   limitation, not evidence of a bug). Please drag a sidebar task to
+   reorder it on a real device before trusting this is done.
 
 ### v3 timer (2026-07-14) — COMPLETE
 The one feature that must be visible outside any single view — touches the

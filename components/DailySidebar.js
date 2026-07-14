@@ -1,11 +1,19 @@
 // DailySidebar — the always-visible right panel: today's tasks with add /
 // complete / skip, all through the shared data layer (no view-owned queries).
+// Reorderable via @dnd-kit, routed through the SAME lib/dragAndDrop.js logic
+// the board/calendar use (CLAUDE.md: interaction logic lives in one place) —
+// the sidebar is just a single-key group (every task here already has
+// scheduled_date = today), so a drop only ever reorders position within
+// that one key, never moves across keys.
 import { useCallback, useEffect, useState } from 'react';
+import { DndContext, closestCorners } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import {
   fetchInstancesForDate,
   createOneOffTask,
   setInstanceStatus,
 } from '@/lib/data';
+import { useDragSensors, handleSharedDragEnd } from '@/lib/dragAndDrop';
 import { todayStr, humanDate } from '@/lib/dates';
 import { color, space, border } from '@/lib/tokens';
 import {
@@ -67,6 +75,22 @@ export default function DailySidebar() {
     }
   };
 
+  // Single-key wrapper around the flat `tasks` list so the shared drag
+  // module (built around a key->items map) works unchanged here — `today`
+  // is the only key that will ever exist in this view.
+  const sensors = useDragSensors();
+  const itemsByKey = { [today]: tasks };
+  const setItemsByKey = (next) => setTasks(next[today] || []);
+  const handleDragEnd = (event) =>
+    handleSharedDragEnd({
+      event,
+      itemsByKey,
+      keyToScheduledDate: () => today,
+      setItemsByKey,
+      refresh,
+      setError,
+    });
+
   return (
     // height:100% (not 100vh) — this renders both in the desktop <aside>
     // (which stretches to the row's 100vh) and inline as the mobile "Today"
@@ -110,9 +134,19 @@ export default function DailySidebar() {
         ) : tasks.length === 0 ? (
           <div style={{ ...textMuted, padding: space[2] }}>No tasks today.</div>
         ) : (
-          tasks.map((t) => (
-            <TaskRow key={t.id} instance={t} onSetStatus={onSetStatus} onEdit={setEditing} />
-          ))
+          <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+            <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+              {tasks.map((t) => (
+                <TaskRow
+                  key={t.id}
+                  instance={t}
+                  columnKey={today}
+                  onSetStatus={onSetStatus}
+                  onEdit={setEditing}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         )}
       </div>
 
