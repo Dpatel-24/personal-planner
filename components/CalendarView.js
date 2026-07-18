@@ -126,6 +126,21 @@ export default function CalendarView() {
 
   const navBtn = { ...buttonSecondary, padding: `${space[1]} ${space[3]}` };
 
+  // Month/year dropdown: generate last 12 months and next 24 months
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const monthOptions = [];
+  for (let y = currentYear - 1; y <= currentYear + 2; y++) {
+    const start = y === currentYear - 1 ? currentMonth : 0;
+    const end = y === currentYear + 2 ? currentMonth : 11;
+    for (let m = start; m <= end; m++) {
+      const d = new Date(y, m, 1);
+      const label = d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+      monthOptions.push({ year: y, month: m, label });
+    }
+  }
+
   return (
     <div>
       <div
@@ -137,9 +152,29 @@ export default function CalendarView() {
           marginBottom: space[4],
         }}
       >
-        <div style={{ fontSize: font.size.xl, fontWeight: font.weight.semibold, color: color.text }}>
-          {monthLabel}
-        </div>
+        <select
+          value={`${year}-${month}`}
+          onChange={(e) => {
+            const [y, m] = e.target.value.split('-');
+            setYm({ year: parseInt(y), month: parseInt(m) });
+          }}
+          style={{
+            fontSize: font.size.md,
+            fontWeight: font.weight.semibold,
+            color: color.text,
+            background: color.bg,
+            border: `1px solid ${color.textMuted}`,
+            borderRadius: `${radius.md}`,
+            padding: `${space[1]} ${space[2]}`,
+            cursor: 'pointer',
+          }}
+        >
+          {monthOptions.map((opt) => (
+            <option key={`${opt.year}-${opt.month}`} value={`${opt.year}-${opt.month}`}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
         <TagFilterDropdown tags={availableTags} selected={selectedTags} onChange={setSelectedTags} />
         <div style={{ display: 'flex', gap: space[1], marginLeft: 'auto' }}>
           <button style={navBtn} onClick={() => shiftMonth(-1)}>
