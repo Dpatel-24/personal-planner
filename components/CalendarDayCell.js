@@ -2,7 +2,8 @@
 // the date string) so an empty day is still a valid drop target, and its
 // visible chips are a dnd-kit SortableContext — the same droppable/sortable
 // pairing WeekBoardColumn uses, just laid out for a compact grid cell instead
-// of a full column.
+// of a full column. Clicking "+X more" expands to show all tasks for the day.
+import { useState } from 'react';
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { color, space, radius, border, font } from '@/lib/tokens';
@@ -21,17 +22,18 @@ export default function CalendarDayCell({
   onToggleStatus,
   onEdit,
 }) {
+  const [expanded, setExpanded] = useState(false);
   const { setNodeRef } = useDroppable({ id: dateStr, data: { columnKey: dateStr } });
-  const visible = items.slice(0, VISIBLE_LIMIT);
+  const visible = expanded ? items : items.slice(0, VISIBLE_LIMIT);
   const itemIds = visible.map((i) => i.id);
 
   return (
     <div
       ref={setNodeRef}
       style={{
-        minHeight: 104,
+        minHeight: expanded ? 'auto' : 104,
         minWidth: 0,
-        overflow: 'hidden',
+        overflow: expanded ? 'visible' : 'hidden',
         padding: space[1],
         background: inMonth ? color.bg : color.bgSubtle,
         borderBottom: isLastRow ? border.none : border.default,
@@ -66,9 +68,25 @@ export default function CalendarDayCell({
         ))}
       </SortableContext>
       {items.length > VISIBLE_LIMIT && (
-        <div style={{ fontSize: font.size.xs, color: color.textMuted, paddingLeft: space[1] }}>
-          +{items.length - VISIBLE_LIMIT} more
-        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded(!expanded);
+          }}
+          style={{
+            fontSize: font.size.xs,
+            color: color.accent,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: `0 ${space[1]}`,
+            textDecoration: 'underline',
+            fontFamily: 'inherit',
+          }}
+        >
+          {expanded ? 'Show less' : `+${items.length - VISIBLE_LIMIT} more`}
+        </button>
       )}
     </div>
   );
