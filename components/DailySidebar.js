@@ -5,7 +5,7 @@
 // the sidebar is just a single-key group (every task here already has
 // scheduled_date = today), so a drop only ever reorders position within
 // that one key, never moves across keys.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { DndContext, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import {
@@ -15,6 +15,7 @@ import {
 } from '@/lib/data';
 import { useDragSensors, handleSharedDragEnd } from '@/lib/dragAndDrop';
 import { todayStr, humanDate } from '@/lib/dates';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { color, space, border } from '@/lib/tokens';
 import {
   input as inputStyle,
@@ -37,6 +38,8 @@ export default function DailySidebar() {
   const [error, setError] = useState(null);
   const [showRecurring, setShowRecurring] = useState(false);
   const [editing, setEditing] = useState(null);
+  const isMobile = useIsMobile();
+  const tasksContainerRef = useRef(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -78,7 +81,7 @@ export default function DailySidebar() {
   // Single-key wrapper around the flat `tasks` list so the shared drag
   // module (built around a key->items map) works unchanged here — `today`
   // is the only key that will ever exist in this view.
-  const sensors = useDragSensors();
+  const sensors = useDragSensors(isMobile);
   const itemsByKey = { [today]: tasks };
   const setItemsByKey = (next) => setTasks(next[today] || []);
   const handleDragEnd = (event) =>

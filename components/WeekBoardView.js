@@ -104,8 +104,8 @@ export default function WeekBoardView() {
   };
   const goThisWeek = () => setRefDate(new Date());
 
-  const sensors = useDragSensors();
   const isMobile = useIsMobile();
+  const sensors = useDragSensors(isMobile);
 
   // The 7 day-columns live in their own scroll region (Inbox stays pinned,
   // static, to its left on desktop — a standard laptop width can't fit all 7
@@ -114,11 +114,13 @@ export default function WeekBoardView() {
   // instead, since a pinned column plus a sliver of scrollable space doesn't
   // work on a phone-width screen). Scroll amount is the container's own
   // width, not a fixed pixel constant, so it's correct at any column width.
+  // On mobile, reduce scroll amount to make scrolling more granular.
   const daysScrollRef = useRef(null);
   const scrollDays = (direction) => {
     const el = daysScrollRef.current;
     if (!el) return;
-    el.scrollBy({ left: direction * el.clientWidth * 0.9, behavior: 'smooth' });
+    const scrollAmount = isMobile ? el.clientWidth * 0.6 : el.clientWidth * 0.9;
+    el.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
   };
 
   // Board's Inbox key maps to a null scheduled_date; every other key is

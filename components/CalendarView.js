@@ -13,6 +13,7 @@ import { fetchInstances, setInstanceStatus } from '@/lib/data';
 import { getTags } from '@/lib/tag-queries';
 import { todayStr, addDays } from '@/lib/dates';
 import { useDragSensors, handleSharedDragEnd } from '@/lib/dragAndDrop';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { buttonSecondary, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
@@ -108,7 +109,8 @@ export default function CalendarView() {
     setYm({ year: now.getFullYear(), month: now.getMonth() });
   };
 
-  const sensors = useDragSensors();
+  const isMobile = useIsMobile();
+  const sensors = useDragSensors(isMobile);
   const handleDragEnd = (event) =>
     handleSharedDragEnd({
       event,

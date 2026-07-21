@@ -16,15 +16,17 @@ import { TimerProvider } from '@/components/TimerContext';
 import { useIsMobile } from '@/lib/useIsMobile';
 
 export default function Home() {
-  const [tab, setTab] = useState('Board');
+  const [tab, setTab] = useState('Today');
   const [managingTags, setManagingTags] = useState(false);
   const isMobile = useIsMobile();
-  const tabs = isMobile ? ['Board', 'Calendar', 'Today'] : ['Board', 'Calendar'];
+  const tabs = isMobile ? ['Today', 'Board', 'Calendar'] : ['Board', 'Calendar'];
 
   // If the window grows past the breakpoint while "Today" is active, that tab
   // no longer exists (desktop shows the sidebar instead) — fall back to Board.
+  // If the window shrinks to mobile and we're on Board, switch to Today.
   useEffect(() => {
     if (!isMobile && tab === 'Today') setTab('Board');
+    if (isMobile && tab === 'Board') setTab('Today');
   }, [isMobile, tab]);
 
   const tabBtn = (active) => ({
