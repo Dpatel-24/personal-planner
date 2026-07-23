@@ -23,10 +23,8 @@ export default function Home() {
 
   // If the window grows past the breakpoint while "Today" is active, that tab
   // no longer exists (desktop shows the sidebar instead) — fall back to Board.
-  // If the window shrinks to mobile and we're on Board, switch to Today.
   useEffect(() => {
     if (!isMobile && tab === 'Today') setTab('Board');
-    if (isMobile && tab === 'Board') setTab('Today');
   }, [isMobile, tab]);
 
   const tabBtn = (active) => ({
