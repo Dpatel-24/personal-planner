@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { DndContext, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import {
-  fetchInstancesForDate,
+  fetchInstancesForDateWithRollover,
   createOneOffTask,
   setInstanceStatus,
 } from '@/lib/data';
@@ -44,7 +44,7 @@ export default function DailySidebar() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setTasks(await fetchInstancesForDate(today));
+      setTasks(await fetchInstancesForDateWithRollover(today));
     } catch (e) {
       setError(e.message);
     } finally {
