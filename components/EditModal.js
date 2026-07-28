@@ -4,7 +4,7 @@
 // already supports it (updateTemplateAll/splitTemplate accept recurrenceRule).
 import { useState } from 'react';
 import Modal from './Modal';
-import { InstanceTagSection, TemplateDefaultTagSection } from './TagAssignSection';
+import { InstanceTagSection } from './TagAssignSection';
 import ChecklistSection from './ChecklistSection';
 import ChecklistTemplateSection from './ChecklistTemplateSection';
 import {
@@ -108,15 +108,6 @@ export default function EditModal({ instance, onClose, onSaved }) {
         <div style={field}>
           <InstanceTagSection instanceId={instance.id} initialTagId={instance.tag_id} />
         </div>
-
-        {isRecurring && instance.template_id && (
-          <div style={field}>
-            <TemplateDefaultTagSection
-              templateId={instance.template_id}
-              initialTagId={instance.template?.defaultTagRow?.id}
-            />
-          </div>
-        )}
 
         <div style={field}>
           <ChecklistSection instanceId={instance.id} />
