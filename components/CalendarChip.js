@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { color, space, radius, font } from '@/lib/tokens';
+import { getTagCardStyle } from '@/lib/tag-styles';
 import { useTimer } from './TimerContext';
 import { formatDuration } from '@/lib/timer-queries';
 
@@ -60,7 +61,8 @@ export default function CalendarChip({ instance, columnKey, onToggleStatus, onEd
         display: 'flex',
         alignItems: 'center',
         gap: 3,
-        background: color.bgMuted,
+        background: instance.tag ? undefined : color.bgMuted,
+        ...getTagCardStyle(instance.tag),
         borderRadius: radius.sm,
         padding: `1px ${space[1]}`,
         marginBottom: 2,

@@ -19,6 +19,7 @@ import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { color, space, radius, font } from '@/lib/tokens';
 import { card as cardStyle } from '@/lib/components';
+import { getTagCardStyle } from '@/lib/tag-styles';
 import { useTimer } from './TimerContext';
 import { formatDuration } from '@/lib/timer-queries';
 
@@ -73,6 +74,7 @@ export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onE
       onClick={() => onEdit(instance)}
       style={{
         ...cardStyle,
+        ...getTagCardStyle(instance.tag),
         padding: space[3],
         marginBottom: space[2],
         cursor: 'grab',
