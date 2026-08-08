@@ -1,40 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/pages/api-reference/create-next-app).
+# Personal Planner
 
-## Getting Started
+A self-hosted task planner that combines the parts of Trello, Blitzit, and
+Sunsama I actually wanted, without paying for three subscriptions or living
+with the one missing feature that made each of them fall short on its own.
 
-First, run the development server:
+## Why this exists
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Trello has the best card and board mechanics of the three, but no concept of
+recurring tasks and no daily planning view.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Sunsama has the daily planning ritual right, real dates on a weekly board,
+a backlog to pull from, unfinished work rolling into today, but it's a paid
+SaaS product and heavier than I needed.
 
-You can start editing the page by modifying `pages/index.js`. The page auto-updates as you edit the file.
+Blitzit has a genuinely satisfying checklist and quick-capture flow, and its
+users had been asking for scheduling and time-tracking improvements for over
+a year without them shipping.
 
-[API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) can be accessed on [http://localhost:3000/api/hello](http://localhost:3000/api/hello). This endpoint can be edited in `pages/api/hello.js`.
+So I built the combination I wanted: Trello's card and drag mechanics,
+Sunsama's weekly board and rollover behavior, Blitzit's checklist feel, plus
+tagging and time tracking underneath so I can see where my time actually
+goes instead of guessing.
 
-The `pages/api` directory is mapped to `/api/*`. Files in this directory are treated as [API routes](https://nextjs.org/docs/pages/building-your-application/routing/api-routes) instead of React pages.
+## What it does
 
-This project uses [`next/font`](https://nextjs.org/docs/pages/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Weekly board.** Seven day columns with real dates, plus an Inbox for
+  anything not yet scheduled. Drag cards between days, drag within a day to
+  reorder.
+- **Recurring tasks.** Weekly, biweekly, monthly, or custom recurrence rules.
+  Edit or drag one occurrence, this week and every week after, or the whole
+  series, your choice, every time.
+- **Automatic rollover.** Anything left unfinished shows up in today's column
+  automatically. Nothing is silently rewritten, the original schedule stays
+  intact.
+- **Calendar view.** Month-level overview, same data as the board, drag to
+  reschedule from here too.
+- **Checklists.** Per-card subtask lists. Recurring tasks carry a template
+  checklist that resets fresh on every new occurrence.
+- **Tags.** Single tag per task (Admin, Personal, Career, whatever categories
+  make sense to you) so time and task data can actually be grouped later.
+- **Time tracking.** Start/stop a timer on any task, visible everywhere in
+  the app while it's running. One timer at a time, on purpose.
 
-## Learn More
+## What it doesn't do
 
-To learn more about Next.js, take a look at the following resources:
+No multi-user support, no notifications, no mobile app, no calendar sync with
+Google or anyone else. This was built for one person's workflow, mine, not
+as a general-purpose product. Analytics on top of the tag and time-tracking
+data is planned but not built.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn-pages-router) - an interactive Next.js tutorial.
+## Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Next.js 14 (Pages Router), Supabase (Postgres), deployed on Vercel.
+Recurrence handled via `rrule.js` (RFC 5545) rather than custom date logic.
+Drag-and-drop via `@dnd-kit`. No CSS framework, hand-built design tokens.
 
-## Deploy on Vercel
+## Status
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/pages/building-your-application/deploying) for more details.
+Actively used daily. Built iteratively in phases, each one shipped and used
+before the next started, rather than planned end-to-end up front.
