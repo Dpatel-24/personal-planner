@@ -26,10 +26,20 @@ export default function WeekBoardColumn({
   // Width comes from the .week-column CSS class (styles/globals.css), not an
   // inline value — a media query there shrinks it on mobile so one column
   // reads as a natural swipeable card instead of desktop's fixed 220px.
+  //
+  // display:flex + flexDirection:column here, paired with the content div's
+  // flex:1 below, is what makes the droppable region cover the WHOLE column
+  // height instead of just wherever the cards happen to end. Without it, a
+  // short column (few cards) only registers drops near its own content —
+  // its parent row still stretches this div to match the tallest sibling
+  // column (default flex align-items:stretch), but a plain block child
+  // doesn't inherit that extra height into its own layout on its own.
   const columnStyle = {
     ...panel,
     flexShrink: 0,
     padding: 0,
+    display: 'flex',
+    flexDirection: 'column',
     background: isInbox ? color.bgMuted : color.bgSubtle,
     border: isInbox ? border.strong : border.default,
   };
@@ -58,7 +68,7 @@ export default function WeekBoardColumn({
         <span style={titleStyle}>{title}</span>
         <span style={{ ...textMuted, fontSize: font.size.xs }}>{items.length}</span>
       </div>
-      <div ref={setNodeRef} style={{ padding: space[2], minHeight: 48 }}>
+      <div ref={setNodeRef} style={{ padding: space[2], minHeight: 48, flex: 1 }}>
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
           {items.length === 0 ? (
             <div style={{ ...textMuted, fontSize: font.size.xs, padding: space[1] }}>Nothing here.</div>

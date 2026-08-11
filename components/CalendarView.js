@@ -8,13 +8,14 @@
 // here, only the key->items state shape and the grid rendering are
 // calendar-specific).
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { DndContext, closestCorners } from '@dnd-kit/core';
+import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { fetchInstances, setInstanceStatus } from '@/lib/data';
 import { getTags } from '@/lib/tag-queries';
 import { todayStr, addDays } from '@/lib/dates';
-import { useDragSensors, handleSharedDragEnd } from '@/lib/dragAndDrop';
+import { useDragSensors, handleSharedDragEnd, useDragOverlayState } from '@/lib/dragAndDrop';
 import { useIsMobile } from '@/lib/useIsMobile';
-import { color, space, radius, border, font } from '@/lib/tokens';
+import { getTagCardStyle } from '@/lib/tag-styles';
+import { color, space, radius, border, font, elevation } from '@/lib/tokens';
 import { buttonSecondary, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
 import CalendarDayCell from './CalendarDayCell';
@@ -111,8 +112,10 @@ export default function CalendarView() {
 
   const isMobile = useIsMobile();
   const sensors = useDragSensors(isMobile);
-  const handleDragEnd = (event) =>
-    handleSharedDragEnd({
+  const { activeInstance, onDragStart, clearActiveInstance } = useDragOverlayState();
+  const handleDragEnd = (event) => {
+    clearActiveInstance();
+    return handleSharedDragEnd({
       event,
       itemsByKey: itemsByDate,
       keyToScheduledDate,
@@ -120,6 +123,7 @@ export default function CalendarView() {
       refresh,
       setError,
     });
+  };
 
   const monthLabel = new Date(year, month, 1).toLocaleDateString(undefined, {
     month: 'long',
@@ -193,7 +197,13 @@ export default function CalendarView() {
 
       {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
 
-      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={onDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={clearActiveInstance}
+      >
         <div style={{ border: border.default, borderRadius: radius.lg, overflow: 'hidden' }}>
           {/* minmax(0, 1fr), not plain 1fr — a bare 1fr track won't shrink
               below its content's min-content width, so on a narrow (phone)
@@ -246,6 +256,48 @@ export default function CalendarView() {
             })}
           </div>
         </div>
+
+        <DragOverlay>
+          {activeInstance ? (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 3,
+                background: activeInstance.tag ? undefined : color.bgMuted,
+                ...getTagCardStyle(activeInstance.tag),
+                borderRadius: radius.sm,
+                padding: `1px ${space[1]}`,
+                boxShadow: elevation.dropdown,
+                cursor: 'grabbing',
+                maxWidth: 160,
+              }}
+            >
+              {activeInstance.tag && (
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: radius.full,
+                    background: activeInstance.tag.color || color.accent,
+                    flexShrink: 0,
+                  }}
+                />
+              )}
+              <span
+                style={{
+                  fontSize: font.size.xs,
+                  color: color.text,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {activeInstance.title || '(untitled)'}
+              </span>
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
 
       {editing && <EditModal instance={editing} onClose={() => setEditing(null)} onSaved={refresh} />}

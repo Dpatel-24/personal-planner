@@ -16,13 +16,14 @@
 // sidebar uses (the v1 edit flow) — see the PointerSensor's activation
 // distance below and WeekBoardCard's click/drag split.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DndContext, closestCorners } from '@dnd-kit/core';
+import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
 import { getWeekDates, getInboxInstances, getColumnInstances } from '@/lib/board-queries';
 import { setInstanceStatus } from '@/lib/data';
-import { useDragSensors, handleSharedDragEnd } from '@/lib/dragAndDrop';
+import { useDragSensors, handleSharedDragEnd, useDragOverlayState } from '@/lib/dragAndDrop';
 import { useIsMobile } from '@/lib/useIsMobile';
-import { color, space, font } from '@/lib/tokens';
-import { buttonSecondary, textMuted } from '@/lib/components';
+import { getTagCardStyle } from '@/lib/tag-styles';
+import { color, space, radius, font, elevation } from '@/lib/tokens';
+import { card as cardStyle, buttonSecondary, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
 import WeekBoardColumn from './WeekBoardColumn';
 import EditModal from './EditModal';
@@ -106,6 +107,7 @@ export default function WeekBoardView() {
 
   const isMobile = useIsMobile();
   const sensors = useDragSensors(isMobile);
+  const { activeInstance, onDragStart, clearActiveInstance } = useDragOverlayState();
 
   // The 7 day-columns live in their own scroll region (Inbox stays pinned,
   // static, to its left on desktop — a standard laptop width can't fit all 7
@@ -127,8 +129,9 @@ export default function WeekBoardView() {
   // already a date string. See lib/dragAndDrop.js for the shared logic.
   const keyToScheduledDate = (key) => (key === INBOX_KEY ? null : key);
 
-  const handleDragEnd = (event) =>
-    handleSharedDragEnd({
+  const handleDragEnd = (event) => {
+    clearActiveInstance();
+    return handleSharedDragEnd({
       event,
       itemsByKey: itemsByColumn,
       keyToScheduledDate,
@@ -136,6 +139,7 @@ export default function WeekBoardView() {
       refresh,
       setError,
     });
+  };
 
   const navBtn = { ...buttonSecondary, padding: `${space[1]} ${space[3]}` };
   const dayScrollBtn = {
@@ -188,8 +192,14 @@ export default function WeekBoardView() {
 
       {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
 
-      <DndContext sensors={sensors} collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
-        <div style={{ display: 'flex', gap: space[3], alignItems: 'flex-start', minWidth: 0 }}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={onDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={clearActiveInstance}
+      >
+        <div style={{ display: 'flex', gap: space[3], alignItems: 'stretch', minWidth: 0 }}>
           {/* Desktop: Inbox stays static, outside the horizontal scroll
               region. Mobile: no room for a pinned column beside a sliver of
               scroll space, so Inbox instead becomes the first card inside
@@ -232,6 +242,38 @@ export default function WeekBoardView() {
             </div>
           </div>
         </div>
+
+        <DragOverlay>
+          {activeInstance ? (
+            <div
+              style={{
+                ...cardStyle,
+                ...getTagCardStyle(activeInstance.tag),
+                padding: space[3],
+                boxShadow: elevation.dropdown,
+                cursor: 'grabbing',
+                maxWidth: 240,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
+                {activeInstance.tag && (
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: radius.full,
+                      background: activeInstance.tag.color || color.accent,
+                      flexShrink: 0,
+                    }}
+                  />
+                )}
+                <div style={{ fontSize: font.size.md, color: color.text, wordBreak: 'break-word' }}>
+                  {activeInstance.title || '(untitled)'}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
 
       {editing && <EditModal instance={editing} onClose={() => setEditing(null)} onSaved={refresh} />}
