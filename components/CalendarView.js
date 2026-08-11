@@ -8,11 +8,11 @@
 // here, only the key->items state shape and the grid rendering are
 // calendar-specific).
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
+import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { fetchInstances, setInstanceStatus } from '@/lib/data';
 import { getTags } from '@/lib/tag-queries';
 import { todayStr, addDays } from '@/lib/dates';
-import { useDragSensors, handleSharedDragEnd, useDragOverlayState } from '@/lib/dragAndDrop';
+import { useDragSensors, handleSharedDragEnd, useDragOverlayState, dragCollisionDetection } from '@/lib/dragAndDrop';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { getTagCardStyle } from '@/lib/tag-styles';
 import { color, space, radius, border, font, elevation } from '@/lib/tokens';
@@ -199,7 +199,7 @@ export default function CalendarView() {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={dragCollisionDetection}
         onDragStart={onDragStart}
         onDragEnd={handleDragEnd}
         onDragCancel={clearActiveInstance}

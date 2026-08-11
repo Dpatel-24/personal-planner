@@ -16,10 +16,10 @@
 // sidebar uses (the v1 edit flow) — see the PointerSensor's activation
 // distance below and WeekBoardCard's click/drag split.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { DndContext, DragOverlay, closestCorners } from '@dnd-kit/core';
+import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { getWeekDates, getInboxInstances, getColumnInstances } from '@/lib/board-queries';
 import { setInstanceStatus } from '@/lib/data';
-import { useDragSensors, handleSharedDragEnd, useDragOverlayState } from '@/lib/dragAndDrop';
+import { useDragSensors, handleSharedDragEnd, useDragOverlayState, dragCollisionDetection } from '@/lib/dragAndDrop';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { getTagCardStyle } from '@/lib/tag-styles';
 import { color, space, radius, font, elevation } from '@/lib/tokens';
@@ -194,7 +194,7 @@ export default function WeekBoardView() {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={dragCollisionDetection}
         onDragStart={onDragStart}
         onDragEnd={handleDragEnd}
         onDragCancel={clearActiveInstance}
