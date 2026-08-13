@@ -203,8 +203,15 @@ export default function WeekBoardView() {
           {/* Desktop: Inbox stays static, outside the horizontal scroll
               region. Mobile: no room for a pinned column beside a sliver of
               scroll space, so Inbox instead becomes the first card inside
-              the same scroll strip as the 7 days (see below). */}
-          {!isMobile && <div style={{ flexShrink: 0 }}>{inboxColumn}</div>}
+              the same scroll strip as the 7 days (see below).
+              No extra wrapper div here — WeekBoardColumn's own root
+              (.week-column) already carries flexShrink:0. An intermediate
+              non-flex wrapper would stretch to match the row's height (from
+              this row's alignItems:stretch) but NOT pass that height down
+              to its own child, leaving the actual column, and therefore its
+              droppable region, sized to its own content again — the same
+              short-column drop bug the day columns already had fixed. */}
+          {!isMobile && inboxColumn}
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: space[2], marginBottom: space[2] }}>
