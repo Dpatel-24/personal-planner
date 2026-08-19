@@ -1,17 +1,42 @@
 // RecurringTaskEditModal — edit a recurring task template's title,
-// description, and default tag. Does NOT allow changing the recurrence rule
-// itself (that's a follow-up).
+// description, default tag, and recurrence rule.
 import { useEffect, useState } from 'react';
 import Modal from './Modal';
 import { getTaskTemplate, updateTaskTemplate } from '@/lib/tag-queries';
 import { TemplateDefaultTagSection } from './TagAssignSection';
+import { FREQUENCIES, buildRRule, describeRRule, weekdayCode, monthDay } from '@/lib/rrulePresets';
 import { color, space, font } from '@/lib/tokens';
 import { input as inputStyle, label as labelStyle, buttonPrimary, buttonSecondary, heading, textMuted } from '@/lib/components';
+
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const WEEKDAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+
+// Parse frequency and weekdays from an RRULE string
+function parseRRule(ruleStr) {
+  if (!ruleStr) return { frequency: 'weekly', weekdays: [] };
+
+  let frequency = 'weekly';
+  let weekdays = [];
+
+  if (ruleStr.includes('FREQ=DAILY')) frequency = 'daily';
+  else if (ruleStr.includes('FREQ=MONTHLY')) frequency = 'monthly';
+  else if (ruleStr.includes('INTERVAL=2')) frequency = 'biweekly';
+  else frequency = 'weekly';
+
+  const byDayMatch = ruleStr.match(/BYDAY=([A-Z,]+)/);
+  if (byDayMatch) {
+    weekdays = byDayMatch[1].split(',');
+  }
+
+  return { frequency, weekdays };
+}
 
 export default function RecurringTaskEditModal({ taskId, onClose, onSaved }) {
   const [template, setTemplate] = useState(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [frequency, setFrequency] = useState('weekly');
+  const [weekdays, setWeekdays] = useState([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -21,14 +46,39 @@ export default function RecurringTaskEditModal({ taskId, onClose, onSaved }) {
         setTemplate(t);
         setTitle(t.title || '');
         setDescription(t.description || '');
+        const parsed = parseRRule(t.recurrence_rule);
+        setFrequency(parsed.frequency);
+        setWeekdays(parsed.weekdays);
       })
       .catch((e) => setError(e.message));
   }, [taskId]);
+
+  const toggleWeekday = (code) => {
+    setWeekdays((prev) =>
+      prev.includes(code) ? prev.filter((d) => d !== code) : [...prev, code]
+    );
+  };
+
+  const getNewRRule = () => {
+    // For weekly/biweekly, use selected weekdays; for others, use the original start date
+    const daysForRule = (frequency === 'weekly' || frequency === 'biweekly')
+      ? weekdays.length > 0 ? weekdays : WEEKDAY_CODES.slice(0, 1)
+      : undefined;
+
+    return buildRRule(frequency, {
+      startDate: template?.start_date,
+      weekdays: daysForRule,
+    });
+  };
 
   const save = async (e) => {
     e.preventDefault();
     if (!title.trim()) {
       setError('Title is required.');
+      return;
+    }
+    if ((frequency === 'weekly' || frequency === 'biweekly') && weekdays.length === 0) {
+      setError('Select at least one day of the week.');
       return;
     }
     setBusy(true);
@@ -37,6 +87,7 @@ export default function RecurringTaskEditModal({ taskId, onClose, onSaved }) {
       await updateTaskTemplate(taskId, {
         title: title.trim(),
         description: description.trim(),
+        recurrence_rule: getNewRRule(),
       });
       onSaved();
       onClose();
@@ -55,13 +106,14 @@ export default function RecurringTaskEditModal({ taskId, onClose, onSaved }) {
   }
 
   const field = { marginBottom: space[3] };
+  const ruleDescription = template ? describeRRule(template.recurrence_rule) : '';
 
   return (
     <Modal onClose={onClose}>
       <form onSubmit={save}>
         <div style={{ ...heading, marginBottom: space[1] }}>Edit Recurring Task</div>
-        <div style={{ ...textMuted, marginBottom: space[4] }}>
-          Rule: {template.recurrence_rule || 'N/A'}
+        <div style={{ ...textMuted, marginBottom: space[4], fontSize: font.size.sm }}>
+          {ruleDescription}
         </div>
 
         <div style={field}>
@@ -75,7 +127,40 @@ export default function RecurringTaskEditModal({ taskId, onClose, onSaved }) {
         </div>
 
         <div style={field}>
-          <TemplateDefaultTagSection templateId={taskId} initialTagId={template.default_tag_id} />
+          <label style={labelStyle}>Frequency</label>
+          <select
+            style={{ ...inputStyle, cursor: 'pointer' }}
+            value={frequency}
+            onChange={(e) => setFrequency(e.target.value)}
+          >
+            {FREQUENCIES.map((f) => (
+              <option key={f.key} value={f.key}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {(frequency === 'weekly' || frequency === 'biweekly') && (
+          <div style={field}>
+            <label style={labelStyle}>Days of week</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[2] }}>
+              {WEEKDAY_CODES.map((code, i) => (
+                <label key={code} style={{ display: 'flex', alignItems: 'center', gap: space[1], cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={weekdays.includes(code)}
+                    onChange={() => toggleWeekday(code)}
+                  />
+                  <span style={{ fontSize: font.size.sm }}>{WEEKDAY_NAMES[i].slice(0, 3)}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div style={field}>
+          <TemplateDefaultTagSection templateId={taskId} initialTagId={template?.default_tag_id} />
         </div>
 
         {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
