@@ -1,6 +1,35 @@
 /* Minimal light-theme reset. Design values live in lib/tokens.js; this file
    only sets page-level defaults that can't be expressed as inline styles.
    v1 is light-only, so no prefers-color-scheme dark handling. */
+
+/* Design tokens as real CSS custom properties. lib/tokens.js's `color`
+   object is still the one actual token system every component consumes
+   (100% of this app's styling is inline JS objects built from it, not CSS
+   classes/variables) — these are hand-kept in sync with the SAME literal
+   hex values added there, not a second parallel source of truth. They
+   exist here, in addition to tokens.js, because this specific ask was for
+   real CSS custom properties in the global stylesheet; anything that needs
+   them from plain CSS (rather than a React inline style) can reach them
+   here without importing JS.
+   Keep in sync with lib/tokens.js's color.ink / color.paper / etc. if
+   either changes. */
+:root {
+  --color-ink: #111110;
+  --color-paper: #f7f6f2;
+  --color-card: #ffffff;
+  --color-muted: #6f6e68;
+  --color-muted-faint: #b0afa9;
+  --color-coherence-bg: #ededfb;
+  --color-coherence-text: #4f39c7;
+  --color-resistance-bg: #fbeaea;
+  --color-resistance-text: #b93232;
+  --color-execution-bg: #ebf5ef;
+  --color-execution-text: #1a6b47;
+  --color-state-momentum: #1a6b47;
+  --color-state-stability: #92510a;
+  --color-state-friction: #b93232;
+}
+
 * {
   box-sizing: border-box;
   margin: 0;
@@ -16,8 +45,19 @@ body {
 body {
   color: #18181b;
   background: #f7f7f8;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
-    Arial, sans-serif;
+  /* Inter first (self-hosted via next/font/google, applied as --font-inter
+     on a wrapper div in pages/_app.js — next/font can't run in
+     _document.js on this Next version, confirmed via a real build error),
+     falling back to the original system stack. This must be ONE var() call
+     with the whole fallback stack as its second argument, not
+     `var(--font-inter), -apple-system, ...` as a font-family LIST — since
+     --font-inter isn't defined at body's own scope (only on that inner
+     div), a bare `var(--font-inter)` with no fallback argument is invalid
+     there and would invalidate this ENTIRE declaration, falling back to
+     body's inherited font (likely the browser's default serif), not the
+     intended stack. */
+  font-family: var(--font-inter, -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, Helvetica, Arial, sans-serif);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
