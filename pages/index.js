@@ -3,10 +3,10 @@
 // can't fit beside main content (it's 340px wide on its own), so it becomes a
 // third "Today" tab instead — same DailySidebar component, just relocated.
 import Head from 'next/head';
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { color, space, radius, border, font } from '@/lib/tokens';
-import { heading, buttonGhost } from '@/lib/components';
+import { useRouter } from 'next/router';
+import { color, space, border } from '@/lib/tokens';
+import AppNav from '@/components/AppNav';
 import DailySidebar from '@/components/DailySidebar';
 import WeekBoardView from '@/components/WeekBoardView';
 import CalendarView from '@/components/CalendarView';
@@ -20,6 +20,7 @@ export default function Home() {
   const [tab, setTab] = useState('Today');
   const [managingTags, setManagingTags] = useState(false);
   const isMobile = useIsMobile();
+  const router = useRouter();
   const tabs = isMobile ? ['Today', 'Board', 'Calendar'] : ['Board', 'Calendar'];
 
   // If the window grows past the breakpoint while "Today" is active, that tab
@@ -28,17 +29,14 @@ export default function Home() {
     if (!isMobile && tab === 'Today') setTab('Board');
   }, [isMobile, tab]);
 
-  const tabBtn = (active) => ({
-    padding: `${space[1]} ${space[3]}`,
-    borderRadius: radius.md,
-    border: border.none,
-    cursor: 'pointer',
-    fontSize: font.size.md,
-    fontWeight: active ? font.weight.semibold : font.weight.medium,
-    fontFamily: font.family,
-    color: active ? color.accent : color.textMuted,
-    background: active ? color.accentSubtle : 'transparent',
-  });
+  // AppNav's Calendar link from Goals/dashboard points at "/?tab=Calendar"
+  // since Board/Calendar are in-page state here, not separate routes — this
+  // is what makes that link actually land on Calendar instead of just
+  // navigating "back to Board" like every other pre-existing Link to "/".
+  // router.isReady guards against reading query before Next has parsed it.
+  useEffect(() => {
+    if (router.isReady && router.query.tab === 'Calendar') setTab('Calendar');
+  }, [router.isReady, router.query.tab]);
 
   return (
     <RefreshProvider>
@@ -58,57 +56,14 @@ export default function Home() {
               flexDirection: 'column',
             }}
           >
-            <header
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: space[2],
-                padding: `${space[3]} ${isMobile ? space[4] : space[6]}`,
-                borderBottom: border.default,
-                background: color.bg,
-                flexShrink: 0,
-              }}
-            >
-              <div style={{ ...heading, fontSize: font.size.lg }}>Planner</div>
-              <nav style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
-                {tabs.map((t) => (
-                  <button key={t} style={tabBtn(tab === t)} onClick={() => setTab(t)}>
-                    {t}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  style={{ ...buttonGhost, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm }}
-                  onClick={() => setManagingTags(true)}
-                >
-                  Manage tags
-                </button>
-                <Link
-                  href="/goals"
-                  style={{
-                    ...buttonGhost,
-                    padding: `${space[1]} ${space[3]}`,
-                    fontSize: font.size.sm,
-                    textDecoration: 'none',
-                  }}
-                >
-                  Goals
-                </Link>
-                <Link
-                  href="/dashboard"
-                  style={{
-                    ...buttonGhost,
-                    padding: `${space[1]} ${space[3]}`,
-                    fontSize: font.size.sm,
-                    textDecoration: 'none',
-                  }}
-                >
-                  Life Formula
-                </Link>
-              </nav>
-            </header>
+            <AppNav
+              current="board"
+              localTabs={tabs}
+              activeLocalTab={tab}
+              onLocalTabChange={setTab}
+              onManageTags={() => setManagingTags(true)}
+              isMobile={isMobile}
+            />
 
             {/* Outside WeekBoardView/CalendarView on purpose — this stays
                 mounted across tab switches, so a running timer keeps

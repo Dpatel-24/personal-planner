@@ -8,13 +8,13 @@
 // below `useIsMobile()`, leaving just header + content) — mirrored here
 // unconditionally, header + content, no aside, at any width.
 import Head from 'next/head';
-import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listGoals, updateGoal, createGoal, deleteGoal } from '@/lib/goals-queries';
-import { color, space, radius, border, font } from '@/lib/tokens';
-import { buttonPrimary, buttonGhost, textMuted } from '@/lib/components';
+import { color, space, radius, font } from '@/lib/tokens';
+import { buttonGhost, textMuted } from '@/lib/components';
+import AppNav from '@/components/AppNav';
 import GoalGraph from '@/components/GoalGraph';
-import AddGoalModal from '@/components/AddGoalModal';
+import TagManagerModal from '@/components/TagManagerModal';
 
 const TREE_LABELS = ['Short-Term', 'Long-Term'];
 const TREE_CATEGORIES = ['short_term', 'long_term']; // index-matched to TREE_LABELS
@@ -70,13 +70,7 @@ export default function GoalsPage() {
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  // null = closed, {} = open (root goal, via the header's "+ Add Goal"
-  // button — pick title/category upfront in a modal). Sub-goal creation no
-  // longer goes through this modal; see onAddSubgoal below for the direct-
-  // insert-then-rename flow instead. AddGoalModal itself still accepts a
-  // parentGoal prop (kept as a general capability of that component), just
-  // nothing on this page passes one anymore.
-  const [addModal, setAddModal] = useState(null);
+  const [managingTags, setManagingTags] = useState(false);
 
   const [activeTree, setActiveTree] = useState(0);
   // Id of a goal just created via onAddRootGoal/onAddSubgoal below, so
@@ -179,18 +173,6 @@ export default function GoalsPage() {
     load();
   }, [load]);
 
-  const headerStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: space[2],
-    padding: `${space[3]} ${space[6]}`,
-    borderBottom: border.default,
-    background: color.bg,
-    flexShrink: 0,
-  };
-
   return (
     <>
       <Head>
@@ -199,24 +181,13 @@ export default function GoalsPage() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
-        <header style={headerStyle}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: space[3] }}>
-              <div style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.ink }}>Goals</div>
-              <Link href="/" style={{ ...buttonGhost, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm, textDecoration: 'none' }}>
-                ← Planner
-              </Link>
-            </div>
-            <div style={{ fontSize: font.size.sm, color: color.muted, marginTop: space[1] }}>
-              A left-to-right view of what's actually moving.
-            </div>
-          </div>
-          <button type="button" style={buttonPrimary} onClick={() => setAddModal({})}>
-            + Add Goal
-          </button>
-        </header>
+        <AppNav current="goals" onManageTags={() => setManagingTags(true)} />
 
         <section style={{ flex: 1, minHeight: 0, padding: space[6], overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ fontSize: font.size.sm, color: color.muted, marginBottom: space[4], flexShrink: 0 }}>
+            A left-to-right view of what's actually moving.
+          </div>
+
           {loading && <div style={textMuted}>Loading…</div>}
           {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
 
@@ -280,13 +251,7 @@ export default function GoalsPage() {
         </section>
       </div>
 
-      {addModal && (
-        <AddGoalModal
-          parentGoal={addModal.parentGoal ?? null}
-          onClose={() => setAddModal(null)}
-          onCreated={load}
-        />
-      )}
+      {managingTags && <TagManagerModal onClose={() => setManagingTags(false)} />}
     </>
   );
 }

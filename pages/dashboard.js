@@ -16,11 +16,11 @@
 // heading instead of a 6th "at a glance" card, so the exact 5-card layout
 // is honored without losing the stat entirely.
 import Head from 'next/head';
-import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { getAllLifeFormulaEntries, computeDashboardStats, computeMonthlySummary } from '@/lib/lifeFormulaStats';
-import { color, space, radius, border, font } from '@/lib/tokens';
-import { buttonGhost } from '@/lib/components';
+import { color, space, radius, font } from '@/lib/tokens';
+import AppNav from '@/components/AppNav';
+import TagManagerModal from '@/components/TagManagerModal';
 
 const STATE_COLOR = {
   Momentum: color.stateMomentum,
@@ -98,6 +98,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState(undefined); // undefined = loading, null = no data, object = loaded
   const [monthly, setMonthly] = useState(undefined);
   const [error, setError] = useState(null);
+  const [managingTags, setManagingTags] = useState(false);
 
   useEffect(() => {
     // One fetch feeds both the weekly stats and the monthly rollup — no
@@ -111,18 +112,6 @@ export default function DashboardPage() {
       .catch((e) => setError(e.message));
   }, []);
 
-  const headerStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    flexWrap: 'wrap',
-    gap: space[2],
-    padding: `${space[3]} ${space[6]}`,
-    borderBottom: border.default,
-    background: color.card,
-    flexShrink: 0,
-  };
-
   const maxTrendScore = stats ? Math.max(...stats.trend.map((e) => Number(e.score)), 0.0001) : 0;
 
   return (
@@ -133,18 +122,13 @@ export default function DashboardPage() {
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: color.paper }}>
-        <header style={headerStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: space[3] }}>
-            <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.ink }}>
-              Life Formula — Dashboard
-            </div>
-            <Link href="/" style={{ ...buttonGhost, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm, textDecoration: 'none' }}>
-              ← Planner
-            </Link>
-          </div>
-        </header>
+        <AppNav current="dashboard" onManageTags={() => setManagingTags(true)} />
 
         <section style={{ flex: 1, minHeight: 0, padding: space[6], overflowY: 'auto', background: color.paper }}>
+          <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.ink, marginBottom: space[4] }}>
+            Life Formula — Dashboard
+          </div>
+
           {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
 
           {stats === undefined && !error && <div style={{ color: color.muted }}>Loading…</div>}
@@ -339,6 +323,8 @@ export default function DashboardPage() {
           )}
         </section>
       </div>
+
+      {managingTags && <TagManagerModal onClose={() => setManagingTags(false)} />}
     </>
   );
 }
