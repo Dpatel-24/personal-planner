@@ -24,7 +24,22 @@
 // newTitle) and lets the caller own the actual persistence + refetch;
 // Escape cancels via a skipNextBlur ref so the blur handler that would
 // otherwise fire right after doesn't also commit the reverted value.
-import { useRef, useState } from 'react';
+//
+// Add sub-goal: every card (leaf or not — any goal can gain children, a
+// leaf simply becomes non-leaf the moment it does) carries a small "+"
+// button calling onAddSubgoal(id). GoalNode.js (the old to-do-list
+// renderer) had a working version of this; it's dead code now, since
+// nothing renders GoalNode anymore post-graph-refactor, and this
+// component — the one actually on screen — had never grown an equivalent.
+// Built fresh here rather than resurrecting GoalNode.
+//
+// autoEditId: the caller (pages/goals.js) sets this to a freshly-created
+// goal's id right after insert + refetch, so the new node opens already in
+// rename mode instead of landing silently with a "New Goal" placeholder
+// title the user has to go hunt down and click themselves. Consumed via
+// onAutoEditConsumed so it doesn't re-trigger edit mode on a later,
+// unrelated re-render (e.g. toggling some other leaf).
+import { useEffect, useRef, useState } from 'react';
 import { color, space, radius, font } from '@/lib/tokens';
 
 const COLUMN_WIDTH = 270; // px between depth columns
@@ -169,7 +184,7 @@ function LeafCheckbox({ checked, onToggle }) {
   );
 }
 
-export default function GoalGraph({ data, onToggleLeaf, onRename }) {
+export default function GoalGraph({ data, onToggleLeaf, onRename, onAddSubgoal, autoEditId, onAutoEditConsumed }) {
   const { nodes, edges } = layoutForest(data);
   const nodesById = Object.fromEntries(nodes.map((n) => [n.id, n]));
 
@@ -185,6 +200,19 @@ export default function GoalGraph({ data, onToggleLeaf, onRename }) {
     setEditingId(n.id);
     setEditValue(n.title);
   };
+
+  // Fires once per genuinely-new autoEditId — by the time the caller sets
+  // it, `data` has already been refetched to include the new node (see
+  // pages/goals.js), so nodesById[autoEditId] is guaranteed to resolve on
+  // this same render. Consuming it immediately (onAutoEditConsumed) is what
+  // keeps this from reopening edit mode on some later unrelated re-render.
+  useEffect(() => {
+    if (autoEditId && nodesById[autoEditId]) {
+      startEdit(nodesById[autoEditId]);
+      onAutoEditConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoEditId]);
 
   const commitEdit = () => {
     const id = editingId;
@@ -322,6 +350,33 @@ export default function GoalGraph({ data, onToggleLeaf, onRename }) {
                     {pct}%
                   </span>
                 )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddSubgoal(n.id);
+                  }}
+                  aria-label={`Add sub-goal under ${n.title}`}
+                  title="Add sub-goal"
+                  style={{
+                    flexShrink: 0,
+                    width: 18,
+                    height: 18,
+                    borderRadius: radius.full,
+                    border: `1px solid ${color.mutedFaint}`,
+                    background: 'transparent',
+                    color: color.muted,
+                    fontSize: 13,
+                    lineHeight: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                    cursor: 'pointer',
+                  }}
+                >
+                  +
+                </button>
               </div>
               {!n.isLeaf && (
                 <div

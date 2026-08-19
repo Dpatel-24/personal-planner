@@ -10,7 +10,7 @@
 import Head from 'next/head';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { listGoals, updateGoal } from '@/lib/goals-queries';
+import { listGoals, updateGoal, createGoal } from '@/lib/goals-queries';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { buttonPrimary, buttonGhost, textMuted } from '@/lib/components';
 import GoalGraph from '@/components/GoalGraph';
@@ -49,10 +49,20 @@ export default function GoalsPage() {
   const [goals, setGoals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  // null = closed. {} = add a root goal. {parentGoal} = add a sub-goal.
+  // null = closed, {} = open (root goal, via the header's "+ Add Goal"
+  // button — pick title/category upfront in a modal). Sub-goal creation no
+  // longer goes through this modal; see onAddSubgoal below for the direct-
+  // insert-then-rename flow instead. AddGoalModal itself still accepts a
+  // parentGoal prop (kept as a general capability of that component), just
+  // nothing on this page passes one anymore.
   const [addModal, setAddModal] = useState(null);
 
   const [activeTree, setActiveTree] = useState(0);
+  // Id of a goal just created via onAddRootGoal/onAddSubgoal below, so
+  // GoalGraph can open it straight into rename mode instead of landing
+  // silently with a "New Goal" placeholder the user has to go find and
+  // click themselves. Cleared by GoalGraph itself once consumed.
+  const [autoEditId, setAutoEditId] = useState(null);
 
   // Real forest, rebuilt from `goals` on every fetch — GoalGraph gets live
   // data, not a separate mutable copy. Since `goals` already refetches after
@@ -80,6 +90,37 @@ export default function GoalsPage() {
     }
   };
 
+  // Scoped to whichever category tab is active — inserts a root with
+  // parent_id null and category = that tab's value, then refetches so the
+  // new node appears in the SAME render pass that sets autoEditId (both
+  // setState calls batch together), guaranteeing GoalGraph's autoEditId
+  // effect finds the node already present in its `data` prop.
+  const onAddRootGoal = async () => {
+    try {
+      const newGoal = await createGoal({ title: 'New Goal', parentId: null, category: TREE_CATEGORIES[activeTree] });
+      await load();
+      setAutoEditId(newGoal.id);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  // Replaces the old onAddSubgoal(goal) => setAddModal({parentGoal: goal}):
+  // that modal-opening version was dead code (nothing rendered ever called
+  // it — GoalNode.js, the only component with a working "+ Sub-goal"
+  // button, hasn't been rendered since the graph refactor). This is a real,
+  // wired-up affordance instead: direct insert, no modal, straight into
+  // rename mode, called from GoalGraph's new per-card "+" button.
+  const onAddSubgoal = async (parentId) => {
+    try {
+      const newGoal = await createGoal({ title: 'New Goal', parentId, category: null });
+      await load();
+      setAutoEditId(newGoal.id);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   const load = useCallback(async () => {
     setError(null);
     try {
@@ -95,8 +136,6 @@ export default function GoalsPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const onAddSubgoal = (goal) => setAddModal({ parentGoal: goal });
 
   const headerStyle = {
     display: 'flex',
@@ -139,29 +178,37 @@ export default function GoalsPage() {
           {loading && <div style={textMuted}>Loading…</div>}
           {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
 
-          <div style={{ display: 'flex', gap: space[2], marginBottom: space[4], flexShrink: 0 }}>
-            {TREE_LABELS.map((label, i) => {
-              const active = activeTree === i;
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => setActiveTree(i)}
-                  style={{
-                    padding: `${space[1]} ${space[4]}`,
-                    borderRadius: radius.full,
-                    border: active ? 'none' : `1px solid ${color.muted}`,
-                    background: active ? color.ink : 'transparent',
-                    color: active ? color.white : color.muted,
-                    fontSize: font.size.sm,
-                    fontWeight: font.weight.medium,
-                    cursor: 'pointer',
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space[4], flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: space[2] }}>
+              {TREE_LABELS.map((label, i) => {
+                const active = activeTree === i;
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setActiveTree(i)}
+                    style={{
+                      padding: `${space[1]} ${space[4]}`,
+                      borderRadius: radius.full,
+                      border: active ? 'none' : `1px solid ${color.muted}`,
+                      background: active ? color.ink : 'transparent',
+                      color: active ? color.white : color.muted,
+                      fontSize: font.size.sm,
+                      fontWeight: font.weight.medium,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Scoped to whichever tab is active — inserts a root with THAT
+                category, not a picker, since the tab already says which
+                tree the user is looking at. */}
+            <button type="button" style={buttonGhost} onClick={onAddRootGoal}>
+              + Add Root Goal
+            </button>
           </div>
 
           {/* Left-to-right graph layout, now backed by the real `goals`
@@ -177,7 +224,14 @@ export default function GoalsPage() {
             forests[activeTree].length === 0 ? (
               <div style={textMuted}>No {TREE_LABELS[activeTree].toLowerCase()} goals yet. Add one above.</div>
             ) : (
-              <GoalGraph data={forests[activeTree]} onToggleLeaf={onToggleLeaf} onRename={onRename} />
+              <GoalGraph
+                data={forests[activeTree]}
+                onToggleLeaf={onToggleLeaf}
+                onRename={onRename}
+                onAddSubgoal={onAddSubgoal}
+                autoEditId={autoEditId}
+                onAutoEditConsumed={() => setAutoEditId(null)}
+              />
             )
           )}
         </section>
