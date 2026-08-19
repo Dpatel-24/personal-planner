@@ -10,109 +10,81 @@
 import Head from 'next/head';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { listGoals, updateGoal, getGoalProgress } from '@/lib/goals-queries';
+import { listGoals, updateGoal } from '@/lib/goals-queries';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { buttonPrimary, buttonGhost, textMuted } from '@/lib/components';
 import GoalGraph from '@/components/GoalGraph';
 import AddGoalModal from '@/components/AddGoalModal';
 
-// Hardcoded placeholder data for the new left-to-right graph layout —
-// rendering-layer swap only, per the ask. Deliberately NOT wired to
-// listGoals()/getGoalProgress() below, which keep running exactly as
-// before (their state — goals, progressByGoalId, childrenByParent — is
-// simply unused by the graph for this step, not removed).
-// Two trees, one shown at a time via the Short-Term/Long-Term pill toggle
-// (index 0 = Short-Term, index 1 = Long-Term — an arbitrary but fixed
-// mapping onto this placeholder data; there's no `category` field on these
-// nodes to derive it from, unlike the real goals table's short_term/
-// long_term category).
-const INITIAL_DATA = [
-  {
-    title: "Ship Personal Planner V4",
-    children: [
-      { title: "Tag manager operations", children: [
-        { title: "Rename flow", done: true },
-        { title: "Delete with confirm-count", done: true },
-        { title: "Merge via Postgres transaction", done: false },
-      ]},
-      { title: "Confirm auth gap", children: [
-        { title: "Decide auth vs anon key", done: false },
-      ]},
-      { title: "Natural language quick-add", done: false },
-    ]
-  },
-  {
-    title: "Rebuild LastKey foundation",
-    children: [
-      { title: "Fix hardcoded fallback creds", done: true },
-      { title: "Lock a final name", children: [
-        { title: "Domain availability check", done: true },
-        { title: "USPTO knockout search", done: false },
-      ]},
-      { title: "Days Inn owner_user_id fix", done: false },
-    ]
-  },
-];
-
 const TREE_LABELS = ['Short-Term', 'Long-Term'];
+const TREE_CATEGORIES = ['short_term', 'long_term']; // index-matched to TREE_LABELS
 
-// GoalGraph is always handed a single-tree array (`[treeData[activeTree]]`),
-// so it always numbers that one tree "root0" internally regardless of which
-// real tree it is — this maps that local id back onto the correct entry in
-// the full two-tree array using `activeTree` (the real index), not the
-// literal digit in the id string.
-function toggleLeafInTree(treeData, activeTree, localId) {
-  const path = localId.split('-').slice(1).map(Number); // drop "root0", keep the rest
-  const next = structuredClone(treeData);
-  let node = next[activeTree];
-  for (const idx of path) node = node.children[idx];
-  node.done = !node.done;
-  return next;
+// Reshapes the flat `goals` list (as returned by listGoals(), each row
+// already carrying effective_category) into the nested {id, title, done,
+// children} forest GoalGraph expects, bucketed by root category. Real
+// goal UUIDs flow straight through as node ids — GoalGraph no longer
+// invents its own, since rename/toggle need to address the actual table
+// row, not a position-derived label.
+function buildGoalForests(goals) {
+  const childrenByParent = {};
+  for (const g of goals) {
+    const key = g.parent_id ?? 'root';
+    (childrenByParent[key] ??= []).push(g);
+  }
+
+  function buildNode(g) {
+    const kids = childrenByParent[g.id] || [];
+    const node = { id: g.id, title: g.title, done: g.is_complete };
+    if (kids.length) node.children = kids.map(buildNode);
+    return node;
+  }
+
+  const roots = childrenByParent['root'] || [];
+  return TREE_CATEGORIES.map((cat) =>
+    roots.filter((g) => g.effective_category === cat).map(buildNode)
+  );
 }
 
 export default function GoalsPage() {
   const [goals, setGoals] = useState([]);
-  const [progressByGoalId, setProgressByGoalId] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   // null = closed. {} = add a root goal. {parentGoal} = add a sub-goal.
   const [addModal, setAddModal] = useState(null);
 
-  // Placeholder-graph state — separate from the real `goals` state above,
-  // which keeps loading in the background untouched. Mutable so toggling a
-  // leaf checkbox recalculates its parent's progress ring live, per the ask
-  // ("no persistence needed yet").
-  const [treeData, setTreeData] = useState(INITIAL_DATA);
   const [activeTree, setActiveTree] = useState(0);
 
-  const onToggleLeaf = (localId) => {
-    setTreeData((prev) => toggleLeafInTree(prev, activeTree, localId));
+  // Real forest, rebuilt from `goals` on every fetch — GoalGraph gets live
+  // data, not a separate mutable copy. Since `goals` already refetches after
+  // every write (see `load()` below), a toggle or rename shows up here
+  // automatically without extra state to keep in sync by hand.
+  const forests = useMemo(() => buildGoalForests(goals), [goals]);
+
+  const onToggleLeaf = async (id) => {
+    const goal = goals.find((g) => g.id === id);
+    if (!goal) return;
+    try {
+      await updateGoal(id, { isComplete: !goal.is_complete });
+      await load(); // no full page reload — refetches goals + progress and re-renders
+    } catch (e) {
+      setError(e.message);
+    }
   };
 
-  const childrenByParent = useMemo(() => {
-    const map = {};
-    for (const g of goals) {
-      const key = g.parent_id ?? 'root';
-      (map[key] ??= []).push(g);
+  const onRename = async (id, newTitle) => {
+    try {
+      await updateGoal(id, { title: newTitle });
+      await load(); // graph re-renders with the new title from the refetch, no full reload
+    } catch (e) {
+      setError(e.message);
     }
-    return map;
-  }, [goals]);
+  };
 
   const load = useCallback(async () => {
     setError(null);
     try {
       const all = await listGoals();
       setGoals(all);
-
-      // A goal is non-leaf if it appears as SOMEONE's parent_id — cheap to
-      // derive from the flat list itself rather than a second query.
-      const parentIds = new Set(all.filter((g) => g.parent_id).map((g) => g.parent_id));
-      const nonLeafIds = all.filter((g) => parentIds.has(g.id)).map((g) => g.id);
-
-      const entries = await Promise.all(
-        nonLeafIds.map(async (id) => [id, await getGoalProgress(id)])
-      );
-      setProgressByGoalId(Object.fromEntries(entries));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -123,15 +95,6 @@ export default function GoalsPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const onToggleComplete = async (goal) => {
-    try {
-      await updateGoal(goal.id, { isComplete: !goal.is_complete });
-      await load(); // no full page reload — just refetches goals + progress and re-renders
-    } catch (e) {
-      setError(e.message);
-    }
-  };
 
   const onAddSubgoal = (goal) => setAddModal({ parentGoal: goal });
 
@@ -201,12 +164,22 @@ export default function GoalsPage() {
             })}
           </div>
 
-          {/* Left-to-right graph layout, placeholder data (see INITIAL_DATA
-              above) — replaces the to-do-list tree rendering for this step.
-              Not gated on `loading`/real goals: this data is fixed,
-              independent of the still-running fetch above. Only the active
-              tree (via the Short-Term/Long-Term toggle) is passed in. */}
-          <GoalGraph data={[treeData[activeTree]]} onToggleLeaf={onToggleLeaf} />
+          {/* Left-to-right graph layout, now backed by the real `goals`
+              table via buildGoalForests() — only the active tree (via the
+              Short-Term/Long-Term toggle) is passed in. GoalGraph's own
+              layout math assumes at least one root node (Math.max over an
+              empty node list is -Infinity), so this must NOT render it
+              during the initial fetch either (goals starts as [], so
+              forests[activeTree] is briefly empty on first paint even when
+              the category isn't actually empty) — gate the whole branch on
+              `!loading`, not just the "genuinely empty" message. */}
+          {!loading && (
+            forests[activeTree].length === 0 ? (
+              <div style={textMuted}>No {TREE_LABELS[activeTree].toLowerCase()} goals yet. Add one above.</div>
+            ) : (
+              <GoalGraph data={forests[activeTree]} onToggleLeaf={onToggleLeaf} onRename={onRename} />
+            )
+          )}
         </section>
       </div>
 

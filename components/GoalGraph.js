@@ -1,8 +1,9 @@
-// GoalGraph — left-to-right node-graph layout for the Goals page. Currently
-// fed hardcoded placeholder data (see pages/goals.js) — a rendering-layer
-// swap only, no data-fetching touched. Pure presentational component: given
-// a forest (array of root nodes, each `{ title, children: [...] }` or
-// `{ title, done }` for a leaf), it computes its own layout and draws it.
+// GoalGraph — left-to-right node-graph layout for the Goals page. Fed the
+// real `goals` table via pages/goals.js's buildGoalForests(). Pure
+// presentational component: given a forest (array of root nodes, each
+// `{ id, title, children: [...] }` or `{ id, title, done }` for a leaf), it
+// computes its own layout and draws it — persistence (rename, leaf toggle)
+// is entirely the caller's job via the onRename/onToggleLeaf props.
 //
 // No graph/diagram library — same "primitives composed in the component, no
 // external dependency for something this app can express directly" approach
@@ -15,6 +16,15 @@
 // allows "var(--line-empty) or similar light neutral", so this uses
 // color.mutedFaint (#B0AFA9), the lightest neutral already in that set,
 // rather than defining a new token for one component.
+//
+// Inline rename: each node's title doubles as a click-to-edit field. Only
+// one editingId is tracked at a time (component-local state, same "pure UI
+// state doesn't need to live on the page" reasoning as GoalNode's old
+// per-node `expanded` state) — committing (Enter/blur) calls onRename(id,
+// newTitle) and lets the caller own the actual persistence + refetch;
+// Escape cancels via a skipNextBlur ref so the blur handler that would
+// otherwise fire right after doesn't also commit the reverted value.
+import { useRef, useState } from 'react';
 import { color, space, radius, font } from '@/lib/tokens';
 
 const COLUMN_WIDTH = 270; // px between depth columns
@@ -40,6 +50,11 @@ function cardHeight(isLeaf) {
 // computed bottom-up. Widths/heights now vary by node type (see above), so
 // this also carries each node's own box size forward for the renderer and
 // the connector math, instead of assuming one fixed size for everything.
+//
+// Nodes now carry their own real `id` (a `goals` table UUID) instead of a
+// synthetic "root0-1-2" string built here — inline rename/toggle need to
+// address the actual database row, so the id has to be the real one all the
+// way through, not a position-derived label reassigned on every render.
 function layoutForest(roots) {
   const nodes = [];
   const edges = [];
@@ -58,7 +73,7 @@ function layoutForest(roots) {
     );
   }
 
-  function layout(node, depth, id) {
+  function layout(node, depth) {
     const isRoot = depth === 0;
     const isLeaf = !node.children || node.children.length === 0;
     const width = cardWidth(isRoot);
@@ -68,13 +83,13 @@ function layoutForest(roots) {
       y = leafCounter * ROW_HEIGHT;
       leafCounter += 1;
     } else {
-      const childYs = node.children.map((child, i) => layout(child, depth + 1, `${id}-${i}`));
+      const childYs = node.children.map((child) => layout(child, depth + 1));
       y = (Math.min(...childYs) + Math.max(...childYs)) / 2;
-      node.children.forEach((_, i) => edges.push({ from: id, to: `${id}-${i}` }));
+      node.children.forEach((child) => edges.push({ from: node.id, to: child.id }));
     }
     const leaves = isLeaf ? null : countLeaves(node);
     nodes.push({
-      id,
+      id: node.id,
       title: node.title,
       done: node.done,
       isLeaf,
@@ -89,8 +104,8 @@ function layoutForest(roots) {
     return y;
   }
 
-  roots.forEach((root, i) => {
-    layout(root, 0, `root${i}`);
+  roots.forEach((root) => {
+    layout(root, 0);
     leafCounter += 1; // one blank row of separation before the next tree
   });
 
@@ -154,9 +169,35 @@ function LeafCheckbox({ checked, onToggle }) {
   );
 }
 
-export default function GoalGraph({ data, onToggleLeaf }) {
+export default function GoalGraph({ data, onToggleLeaf, onRename }) {
   const { nodes, edges } = layoutForest(data);
   const nodesById = Object.fromEntries(nodes.map((n) => [n.id, n]));
+
+  const [editingId, setEditingId] = useState(null);
+  const [editValue, setEditValue] = useState('');
+  // Escape sets this before blurring the input (blur fires right after) so
+  // the blur handler below can tell "cancelled" apart from "clicked away to
+  // commit" and skip writing the reverted value.
+  const skipNextBlur = useRef(false);
+
+  const startEdit = (n) => {
+    skipNextBlur.current = false;
+    setEditingId(n.id);
+    setEditValue(n.title);
+  };
+
+  const commitEdit = () => {
+    const id = editingId;
+    const trimmed = editValue.trim();
+    setEditingId(null);
+    if (!id || !trimmed || trimmed === nodesById[id]?.title) return; // no-op edit, nothing to persist
+    onRename(id, trimmed);
+  };
+
+  const cancelEdit = () => {
+    skipNextBlur.current = true;
+    setEditingId(null);
+  };
 
   const contentWidth = Math.max(...nodes.map((n) => n.x + n.width)) + PADDING * 2;
   const contentHeight = Math.max(...nodes.map((n) => n.y + n.height / 2)) + PADDING * 2;
@@ -217,22 +258,65 @@ export default function GoalGraph({ data, onToggleLeaf }) {
                 ) : (
                   <ProgressRing pct={pct} />
                 )}
-                <span
-                  style={{
-                    flex: 1,
-                    minWidth: 0,
-                    fontSize: n.isRoot ? font.size.md : font.size.sm,
-                    fontWeight: n.isRoot ? font.weight.bold : font.weight.medium,
-                    color: n.isLeaf && n.done ? color.mutedFaint : color.ink,
-                    textDecoration: n.isLeaf && n.done ? 'line-through' : 'none',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                  title={n.title}
-                >
-                  {n.title}
-                </span>
+                {editingId === n.id ? (
+                  <input
+                    autoFocus
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        commitEdit();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        cancelEdit();
+                      }
+                    }}
+                    onBlur={() => {
+                      if (skipNextBlur.current) {
+                        skipNextBlur.current = false;
+                        return;
+                      }
+                      commitEdit();
+                    }}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: n.isRoot ? font.size.md : font.size.sm,
+                      fontWeight: n.isRoot ? font.weight.bold : font.weight.medium,
+                      color: color.ink,
+                      fontFamily: font.family,
+                      border: `1px solid ${color.coherenceText}`,
+                      borderRadius: radius.sm,
+                      padding: '0 2px',
+                      background: color.paper,
+                      outline: 'none',
+                    }}
+                  />
+                ) : (
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startEdit(n);
+                    }}
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      fontSize: n.isRoot ? font.size.md : font.size.sm,
+                      fontWeight: n.isRoot ? font.weight.bold : font.weight.medium,
+                      color: n.isLeaf && n.done ? color.mutedFaint : color.ink,
+                      textDecoration: n.isLeaf && n.done ? 'line-through' : 'none',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      cursor: 'text',
+                    }}
+                    title={n.title}
+                  >
+                    {n.title}
+                  </span>
+                )}
                 {!n.isLeaf && (
                   <span style={{ fontSize: font.size.xs, color: color.muted, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
                     {pct}%
