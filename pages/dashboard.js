@@ -37,6 +37,52 @@ const sectionLabelStyle = {
   marginBottom: space[2],
 };
 
+// Plain SVG line chart — no charting library in this app (checked before
+// the earlier restyle prompt too), same "primitives composed in the
+// component" approach the bar-based Weekly Trend section already uses,
+// just SVG instead of stacked divs since a moving-average TREND reads
+// naturally as a line, not a bar per week. `series` is
+// lib/lifeFormulaStats.js's movingAverageSeries() output — [{week_label,
+// avg}], already in chronological order.
+function MovingAverageChart({ series }) {
+  const width = 560;
+  const height = 160;
+  const padTop = 24;
+  const padBottom = 28;
+  const padX = 24;
+
+  const values = series.map((p) => p.avg);
+  const minV = Math.min(...values);
+  const maxV = Math.max(...values);
+  const range = maxV - minV || 1; // flat series (all equal) — avoid a /0
+  const plotH = height - padTop - padBottom;
+
+  const points = series.map((p, i) => ({
+    ...p,
+    x: series.length === 1 ? width / 2 : padX + (i / (series.length - 1)) * (width - padX * 2),
+    y: padTop + plotH - ((p.avg - minV) / range) * plotH,
+  }));
+
+  const pathD = points.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ');
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', fontFamily: font.family }}>
+      <path d={pathD} fill="none" stroke={color.ink} strokeWidth={2} />
+      {points.map((pt) => (
+        <g key={pt.week_label}>
+          <circle cx={pt.x} cy={pt.y} r={3.5} fill={color.ink} />
+          <text x={pt.x} y={pt.y - 10} textAnchor="middle" fontSize={10} fill={color.muted}>
+            {pt.avg.toFixed(2)}
+          </text>
+          <text x={pt.x} y={height - 8} textAnchor="middle" fontSize={9} fill={color.mutedFaint}>
+            {pt.week_label}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 function StatCard({ label, value, color: valueColor }) {
   return (
     <div style={{ background: color.card, borderRadius: radius.lg, padding: space[4], flex: '1 1 160px', minWidth: 160 }}>
@@ -179,8 +225,20 @@ export default function DashboardPage() {
                 ))}
               </div>
 
-              <div style={{ fontSize: font.size.xs, color: color.mutedFaint }}>
-                4-week moving average: {stats.fourWeekAvg !== null ? stats.fourWeekAvg.toFixed(4) : 'needs 4+ weeks'}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: space[2], marginBottom: space[2] }}>
+                <div style={sectionLabelStyle}>4-Week Moving Average</div>
+                <span style={{ fontSize: font.size.xs, color: color.muted }}>
+                  {stats.fourWeekAvg !== null ? `current: ${stats.fourWeekAvg.toFixed(4)}` : 'needs 4+ weeks'}
+                </span>
+              </div>
+              <div style={{ background: color.card, borderRadius: radius.lg, padding: space[4], maxWidth: 560 }}>
+                {stats.movingAverageTrend.length > 0 ? (
+                  <MovingAverageChart series={stats.movingAverageTrend} />
+                ) : (
+                  <div style={{ fontSize: font.size.sm, color: color.muted }}>
+                    Needs at least 4 logged weeks before a moving-average trend can be plotted.
+                  </div>
+                )}
               </div>
             </>
           )}
