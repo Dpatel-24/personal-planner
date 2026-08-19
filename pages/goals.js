@@ -13,12 +13,40 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listGoals, updateGoal, getGoalProgress } from '@/lib/goals-queries';
 import { color, space, border, font } from '@/lib/tokens';
 import { heading, buttonPrimary, buttonGhost, textMuted } from '@/lib/components';
-import GoalNode from '@/components/GoalNode';
+import GoalGraph from '@/components/GoalGraph';
 import AddGoalModal from '@/components/AddGoalModal';
 
-const SECTIONS = [
-  ['short_term', 'Short-Term Goals'],
-  ['long_term', 'Long-Term Goals'],
+// Hardcoded placeholder data for the new left-to-right graph layout —
+// rendering-layer swap only, per the ask. Deliberately NOT wired to
+// listGoals()/getGoalProgress() below, which keep running exactly as
+// before (their state — goals, progressByGoalId, childrenByParent — is
+// simply unused by the graph for this step, not removed).
+const data = [
+  {
+    title: "Ship Personal Planner V4",
+    children: [
+      { title: "Tag manager operations", children: [
+        { title: "Rename flow", done: true },
+        { title: "Delete with confirm-count", done: true },
+        { title: "Merge via Postgres transaction", done: false },
+      ]},
+      { title: "Confirm auth gap", children: [
+        { title: "Decide auth vs anon key", done: false },
+      ]},
+      { title: "Natural language quick-add", done: false },
+    ]
+  },
+  {
+    title: "Rebuild LastKey foundation",
+    children: [
+      { title: "Fix hardcoded fallback creds", done: true },
+      { title: "Lock a final name", children: [
+        { title: "Domain availability check", done: true },
+        { title: "USPTO knockout search", done: false },
+      ]},
+      { title: "Days Inn owner_user_id fix", done: false },
+    ]
+  },
 ];
 
 export default function GoalsPage() {
@@ -87,8 +115,6 @@ export default function GoalsPage() {
     flexShrink: 0,
   };
 
-  const sectionStyle = { marginBottom: space[6] };
-
   return (
     <>
       <Head>
@@ -109,34 +135,15 @@ export default function GoalsPage() {
           </button>
         </header>
 
-        <section style={{ flex: 1, minHeight: 0, padding: space[6], overflowY: 'auto' }}>
+        <section style={{ flex: 1, minHeight: 0, padding: space[6], overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {loading && <div style={textMuted}>Loading…</div>}
           {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
 
-          {!loading &&
-            SECTIONS.map(([categoryKey, label]) => {
-              const roots = childrenByParent.root?.filter((g) => g.category === categoryKey) ?? [];
-              return (
-                <div key={categoryKey} style={sectionStyle}>
-                  <div style={{ ...heading, fontSize: font.size.lg, marginBottom: space[2] }}>{label}</div>
-                  {roots.length === 0 ? (
-                    <div style={textMuted}>No goals yet.</div>
-                  ) : (
-                    roots.map((goal) => (
-                      <GoalNode
-                        key={goal.id}
-                        goal={goal}
-                        childrenByParent={childrenByParent}
-                        progressByGoalId={progressByGoalId}
-                        depth={0}
-                        onToggleComplete={onToggleComplete}
-                        onAddSubgoal={onAddSubgoal}
-                      />
-                    ))
-                  )}
-                </div>
-              );
-            })}
+          {/* Left-to-right graph layout, placeholder data (see `data` above)
+              — replaces the to-do-list tree rendering for this step. Not
+              gated on `loading`/real goals: this data is fixed, independent
+              of the still-running fetch above. */}
+          <GoalGraph data={data} />
         </section>
       </div>
 
