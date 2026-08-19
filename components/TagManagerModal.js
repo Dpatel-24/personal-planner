@@ -8,6 +8,7 @@ import { getTags, createTag, updateTag, deleteTag } from '@/lib/tag-queries';
 import { color, space, radius, font } from '@/lib/tokens';
 import { input as inputStyle, buttonPrimary, buttonSecondary, buttonGhost, heading, textMuted } from '@/lib/components';
 import RecurringTasksModal from './RecurringTasksModal';
+import RecurringTaskEditModal from './RecurringTaskEditModal';
 
 export default function TagManagerModal({ onClose }) {
   const [tags, setTags] = useState([]);
@@ -19,6 +20,7 @@ export default function TagManagerModal({ onClose }) {
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
   const [showRecurring, setShowRecurring] = useState(false);
+  const [editingTaskId, setEditingTaskId] = useState(null);
 
   const load = () => getTags().then(setTags).catch((e) => setError(e.message));
 
@@ -206,12 +208,23 @@ export default function TagManagerModal({ onClose }) {
         </button>
       </div>
 
-      {showRecurring && (
+      {showRecurring && !editingTaskId && (
         <RecurringTasksModal
           onClose={() => setShowRecurring(false)}
           onEditTask={(taskId) => {
-            console.log('Edit task:', taskId);
+            setEditingTaskId(taskId);
+          }}
+        />
+      )}
+
+      {editingTaskId && (
+        <RecurringTaskEditModal
+          taskId={editingTaskId}
+          onClose={() => setEditingTaskId(null)}
+          onSaved={() => {
+            setEditingTaskId(null);
             setShowRecurring(false);
+            load();
           }}
         />
       )}
