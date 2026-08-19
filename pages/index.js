@@ -96,6 +96,17 @@ export default function Home() {
                 >
                   Goals
                 </Link>
+                <Link
+                  href="/dashboard"
+                  style={{
+                    ...buttonGhost,
+                    padding: `${space[1]} ${space[3]}`,
+                    fontSize: font.size.sm,
+                    textDecoration: 'none',
+                  }}
+                >
+                  Life Formula
+                </Link>
               </nav>
             </header>
 
