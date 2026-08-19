@@ -3,6 +3,7 @@
 // can't fit beside main content (it's 340px wide on its own), so it becomes a
 // third "Today" tab instead — same DailySidebar component, just relocated.
 import Head from 'next/head';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { heading, buttonGhost } from '@/lib/components';
@@ -84,6 +85,17 @@ export default function Home() {
                 >
                   Manage tags
                 </button>
+                <Link
+                  href="/goals"
+                  style={{
+                    ...buttonGhost,
+                    padding: `${space[1]} ${space[3]}`,
+                    fontSize: font.size.sm,
+                    textDecoration: 'none',
+                  }}
+                >
+                  Goals
+                </Link>
               </nav>
             </header>
 
