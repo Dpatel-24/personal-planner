@@ -18,7 +18,7 @@
 import Head from 'next/head';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { getAllLifeFormulaEntries, computeDashboardStats } from '@/lib/lifeFormulaStats';
+import { getAllLifeFormulaEntries, computeDashboardStats, computeMonthlySummary } from '@/lib/lifeFormulaStats';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { buttonGhost } from '@/lib/components';
 
@@ -96,11 +96,18 @@ function StatCard({ label, value, color: valueColor }) {
 
 export default function DashboardPage() {
   const [stats, setStats] = useState(undefined); // undefined = loading, null = no data, object = loaded
+  const [monthly, setMonthly] = useState(undefined);
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    // One fetch feeds both the weekly stats and the monthly rollup — no
+    // second round trip, same "one fetch, several derived views" shape
+    // computeDashboardStats() itself already established.
     getAllLifeFormulaEntries()
-      .then((entries) => setStats(computeDashboardStats(entries)))
+      .then((entries) => {
+        setStats(computeDashboardStats(entries));
+        setMonthly(computeMonthlySummary(entries));
+      })
       .catch((e) => setError(e.message));
   }, []);
 
@@ -231,7 +238,7 @@ export default function DashboardPage() {
                   {stats.fourWeekAvg !== null ? `current: ${stats.fourWeekAvg.toFixed(4)}` : 'needs 4+ weeks'}
                 </span>
               </div>
-              <div style={{ background: color.card, borderRadius: radius.lg, padding: space[4], maxWidth: 560 }}>
+              <div style={{ background: color.card, borderRadius: radius.lg, padding: space[4], maxWidth: 560, marginBottom: space[6] }}>
                 {stats.movingAverageTrend.length > 0 ? (
                   <MovingAverageChart series={stats.movingAverageTrend} />
                 ) : (
@@ -240,6 +247,94 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+
+              {monthly && (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: space[2], marginBottom: space[2] }}>
+                    <div style={sectionLabelStyle}>Monthly Log</div>
+                    <span style={{ fontSize: font.size.xs, color: color.muted }}>
+                      (rolled up from weekly entries — no separate monthly logging)
+                    </span>
+                  </div>
+                  <div style={{ background: color.card, borderRadius: radius.lg, overflow: 'hidden', maxWidth: 640, marginBottom: space[4] }}>
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr',
+                        gap: space[2],
+                        padding: `${space[2]} ${space[4]}`,
+                        background: color.ink,
+                        color: color.white,
+                        fontSize: font.size.xs,
+                        fontWeight: font.weight.bold,
+                      }}
+                    >
+                      <div>Month</div>
+                      <div>Weeks Logged</div>
+                      <div>Avg L(t)</div>
+                      <div>3-Mo MA</div>
+                      <div>State</div>
+                    </div>
+                    {monthly.months.map((m) => (
+                      <div
+                        key={m.monthKey}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 1fr 1fr 1fr 1fr',
+                          gap: space[2],
+                          padding: `${space[2]} ${space[4]}`,
+                          fontSize: font.size.sm,
+                          color: color.ink,
+                          borderTop: `1px solid ${color.paper}`,
+                        }}
+                      >
+                        <div>{m.monthName}</div>
+                        <div>{m.weeksLogged}</div>
+                        <div style={{ fontWeight: font.weight.semibold }}>{m.avgScore.toFixed(2)}</div>
+                        <div style={{ color: color.muted }}>{m.threeMonthAvg !== null ? m.threeMonthAvg.toFixed(2) : '—'}</div>
+                        <div style={{ color: STATE_COLOR[m.state], fontWeight: font.weight.semibold }}>{m.state}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ background: color.card, borderRadius: radius.lg, overflow: 'hidden', maxWidth: 320 }}>
+                    <div
+                      style={{
+                        padding: `${space[2]} ${space[4]}`,
+                        background: color.ink,
+                        color: color.white,
+                        fontSize: font.size.xs,
+                        fontWeight: font.weight.bold,
+                      }}
+                    >
+                      Year Summary
+                    </div>
+                    {[
+                      ['Annual Average L(t)', monthly.annualAverage.toFixed(2)],
+                      ['Peak Month', monthly.peakMonth],
+                      ['Lowest Month', monthly.lowestMonth],
+                      ['Months in Momentum', monthly.monthsInState.Momentum],
+                      ['Months in Stability', monthly.monthsInState.Stability],
+                      ['Months in Friction', monthly.monthsInState.Friction],
+                    ].map(([label, value]) => (
+                      <div
+                        key={label}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: space[3],
+                          padding: `${space[2]} ${space[4]}`,
+                          fontSize: font.size.sm,
+                          borderTop: `1px solid ${color.paper}`,
+                        }}
+                      >
+                        <span style={{ color: color.muted }}>{label}</span>
+                        <span style={{ color: color.ink, fontWeight: font.weight.semibold }}>{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </>
           )}
         </section>
