@@ -2,7 +2,7 @@
 // title/description with the CLAUDE.md three-way scope (this / this+future / all).
 // Changing the recurrence rule itself from here is a follow-up; the data layer
 // already supports it (updateTemplateAll/splitTemplate accept recurrenceRule).
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Modal from './Modal';
 import { InstanceTagSection } from './TagAssignSection';
 import ChecklistSection from './ChecklistSection';
@@ -14,6 +14,7 @@ import {
   splitTemplate,
   deleteInstance,
 } from '@/lib/data';
+import { supabase } from '@/lib/supabaseClient';
 import { humanDate } from '@/lib/dates';
 import { color, space, font } from '@/lib/tokens';
 import {
@@ -40,6 +41,25 @@ export default function EditModal({ instance, onClose, onSaved }) {
   const [scope, setScope] = useState('single');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
+  const [template, setTemplate] = useState(instance.template || null);
+
+  // Fetch the full template object if needed for "future" scope
+  useEffect(() => {
+    if (isRecurring && !instance.template && instance.template_id) {
+      supabase
+        .from('task_templates')
+        .select('*')
+        .eq('id', instance.template_id)
+        .single()
+        .then(({ data, error: err }) => {
+          if (err) {
+            setError(err.message);
+          } else {
+            setTemplate(data);
+          }
+        });
+    }
+  }, [isRecurring, instance.template, instance.template_id]);
 
   const save = async (e) => {
     e.preventDefault();
@@ -59,7 +79,12 @@ export default function EditModal({ instance, onClose, onSaved }) {
       } else if (scope === 'single') {
         await overrideInstance(instance.id, fields);
       } else if (scope === 'future') {
-        await splitTemplate(instance.template, instance.scheduled_date, fields);
+        if (!template) {
+          setError('Template data is loading. Please try again.');
+          setBusy(false);
+          return;
+        }
+        await splitTemplate(template, instance.scheduled_date, fields);
       } else {
         await updateTemplateAll(instance.template_id, fields);
       }
