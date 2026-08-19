@@ -11,8 +11,8 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listGoals, updateGoal, getGoalProgress } from '@/lib/goals-queries';
-import { color, space, border, font } from '@/lib/tokens';
-import { heading, buttonPrimary, buttonGhost, textMuted } from '@/lib/components';
+import { color, space, radius, border, font } from '@/lib/tokens';
+import { buttonPrimary, buttonGhost, textMuted } from '@/lib/components';
 import GoalGraph from '@/components/GoalGraph';
 import AddGoalModal from '@/components/AddGoalModal';
 
@@ -21,7 +21,12 @@ import AddGoalModal from '@/components/AddGoalModal';
 // listGoals()/getGoalProgress() below, which keep running exactly as
 // before (their state — goals, progressByGoalId, childrenByParent — is
 // simply unused by the graph for this step, not removed).
-const data = [
+// Two trees, one shown at a time via the Short-Term/Long-Term pill toggle
+// (index 0 = Short-Term, index 1 = Long-Term — an arbitrary but fixed
+// mapping onto this placeholder data; there's no `category` field on these
+// nodes to derive it from, unlike the real goals table's short_term/
+// long_term category).
+const INITIAL_DATA = [
   {
     title: "Ship Personal Planner V4",
     children: [
@@ -49,6 +54,22 @@ const data = [
   },
 ];
 
+const TREE_LABELS = ['Short-Term', 'Long-Term'];
+
+// GoalGraph is always handed a single-tree array (`[treeData[activeTree]]`),
+// so it always numbers that one tree "root0" internally regardless of which
+// real tree it is — this maps that local id back onto the correct entry in
+// the full two-tree array using `activeTree` (the real index), not the
+// literal digit in the id string.
+function toggleLeafInTree(treeData, activeTree, localId) {
+  const path = localId.split('-').slice(1).map(Number); // drop "root0", keep the rest
+  const next = structuredClone(treeData);
+  let node = next[activeTree];
+  for (const idx of path) node = node.children[idx];
+  node.done = !node.done;
+  return next;
+}
+
 export default function GoalsPage() {
   const [goals, setGoals] = useState([]);
   const [progressByGoalId, setProgressByGoalId] = useState({});
@@ -56,6 +77,17 @@ export default function GoalsPage() {
   const [error, setError] = useState(null);
   // null = closed. {} = add a root goal. {parentGoal} = add a sub-goal.
   const [addModal, setAddModal] = useState(null);
+
+  // Placeholder-graph state — separate from the real `goals` state above,
+  // which keeps loading in the background untouched. Mutable so toggling a
+  // leaf checkbox recalculates its parent's progress ring live, per the ask
+  // ("no persistence needed yet").
+  const [treeData, setTreeData] = useState(INITIAL_DATA);
+  const [activeTree, setActiveTree] = useState(0);
+
+  const onToggleLeaf = (localId) => {
+    setTreeData((prev) => toggleLeafInTree(prev, activeTree, localId));
+  };
 
   const childrenByParent = useMemo(() => {
     const map = {};
@@ -124,11 +156,16 @@ export default function GoalsPage() {
       </Head>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
         <header style={headerStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: space[3] }}>
-            <div style={{ ...heading, fontSize: font.size.lg }}>Goals</div>
-            <Link href="/" style={{ ...buttonGhost, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm, textDecoration: 'none' }}>
-              ← Planner
-            </Link>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: space[3] }}>
+              <div style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.ink }}>Goals</div>
+              <Link href="/" style={{ ...buttonGhost, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm, textDecoration: 'none' }}>
+                ← Planner
+              </Link>
+            </div>
+            <div style={{ fontSize: font.size.sm, color: color.muted, marginTop: space[1] }}>
+              A left-to-right view of what's actually moving.
+            </div>
           </div>
           <button type="button" style={buttonPrimary} onClick={() => setAddModal({})}>
             + Add Goal
@@ -139,11 +176,37 @@ export default function GoalsPage() {
           {loading && <div style={textMuted}>Loading…</div>}
           {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
 
-          {/* Left-to-right graph layout, placeholder data (see `data` above)
-              — replaces the to-do-list tree rendering for this step. Not
-              gated on `loading`/real goals: this data is fixed, independent
-              of the still-running fetch above. */}
-          <GoalGraph data={data} />
+          <div style={{ display: 'flex', gap: space[2], marginBottom: space[4], flexShrink: 0 }}>
+            {TREE_LABELS.map((label, i) => {
+              const active = activeTree === i;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setActiveTree(i)}
+                  style={{
+                    padding: `${space[1]} ${space[4]}`,
+                    borderRadius: radius.full,
+                    border: active ? 'none' : `1px solid ${color.muted}`,
+                    background: active ? color.ink : 'transparent',
+                    color: active ? color.white : color.muted,
+                    fontSize: font.size.sm,
+                    fontWeight: font.weight.medium,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Left-to-right graph layout, placeholder data (see INITIAL_DATA
+              above) — replaces the to-do-list tree rendering for this step.
+              Not gated on `loading`/real goals: this data is fixed,
+              independent of the still-running fetch above. Only the active
+              tree (via the Short-Term/Long-Term toggle) is passed in. */}
+          <GoalGraph data={[treeData[activeTree]]} onToggleLeaf={onToggleLeaf} />
         </section>
       </div>
 

@@ -97,3 +97,15 @@ a {
     max-width: 320px;
   }
 }
+
+/* GoalGraph node card hover — can't be expressed as an inline style, same
+   reasoning as .scrollbar-hidden above. Reuses lib/tokens.js's elevation.hover
+   shadow value (never applied to a static container elsewhere, per CLAUDE.md's
+   "shadow only on overlay/interactive elements" rule — a hover state IS
+   interactive). */
+.goal-card {
+  transition: box-shadow 0.15s ease;
+}
+.goal-card:hover {
+  box-shadow: 0 2px 8px rgba(24, 24, 27, 0.06);
+}
