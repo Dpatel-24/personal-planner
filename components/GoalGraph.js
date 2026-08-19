@@ -39,6 +39,14 @@
 // title the user has to go hunt down and click themselves. Consumed via
 // onAutoEditConsumed so it doesn't re-trigger edit mode on a later,
 // unrelated re-render (e.g. toggling some other leaf).
+//
+// Delete: a small "×" next to the "+" button calls onDeleteGoal(id) with no
+// confirmation of its own — the caller (pages/goals.js) owns building the
+// leaf-vs-non-leaf confirmation copy (it needs a descendant count from the
+// full flat `goals` list, which this component never receives — it only
+// ever sees ONE tree's worth of already-shaped nodes) and the actual
+// deleteGoal() + refetch. This component's job stays purely presentational,
+// same division as onRename/onToggleLeaf/onAddSubgoal above.
 import { useEffect, useRef, useState } from 'react';
 import { color, space, radius, font } from '@/lib/tokens';
 
@@ -184,7 +192,7 @@ function LeafCheckbox({ checked, onToggle }) {
   );
 }
 
-export default function GoalGraph({ data, onToggleLeaf, onRename, onAddSubgoal, autoEditId, onAutoEditConsumed }) {
+export default function GoalGraph({ data, onToggleLeaf, onRename, onAddSubgoal, onDeleteGoal, autoEditId, onAutoEditConsumed }) {
   const { nodes, edges } = layoutForest(data);
   const nodesById = Object.fromEntries(nodes.map((n) => [n.id, n]));
 
@@ -376,6 +384,33 @@ export default function GoalGraph({ data, onToggleLeaf, onRename, onAddSubgoal, 
                   }}
                 >
                   +
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDeleteGoal(n.id);
+                  }}
+                  aria-label={`Delete ${n.title}`}
+                  title="Delete goal"
+                  style={{
+                    flexShrink: 0,
+                    width: 18,
+                    height: 18,
+                    borderRadius: radius.full,
+                    border: `1px solid ${color.mutedFaint}`,
+                    background: 'transparent',
+                    color: color.resistanceText,
+                    fontSize: 12,
+                    lineHeight: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: 0,
+                    cursor: 'pointer',
+                  }}
+                >
+                  ×
                 </button>
               </div>
               {!n.isLeaf && (

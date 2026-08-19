@@ -10,7 +10,7 @@
 import Head from 'next/head';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { listGoals, updateGoal, createGoal } from '@/lib/goals-queries';
+import { listGoals, updateGoal, createGoal, deleteGoal } from '@/lib/goals-queries';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { buttonPrimary, buttonGhost, textMuted } from '@/lib/components';
 import GoalGraph from '@/components/GoalGraph';
@@ -43,6 +43,27 @@ function buildGoalForests(goals) {
   return TREE_CATEGORIES.map((cat) =>
     roots.filter((g) => g.effective_category === cat).map(buildNode)
   );
+}
+
+// Counts every descendant under `id` — NOT including id itself — by walking
+// the same flat `goals` list the page already has in hand, no extra round
+// trip. Deliberately a plain JS walk rather than get_goal_progress (that RPC
+// counts complete/total LEAVES for a progress percentage, a different
+// question from "how many rows total, leaf or not, hang off this one" that
+// the delete-confirmation copy needs).
+function countDescendants(goals, id) {
+  const childrenByParent = {};
+  for (const g of goals) {
+    if (g.parent_id) (childrenByParent[g.parent_id] ??= []).push(g.id);
+  }
+  let count = 0;
+  const stack = [...(childrenByParent[id] || [])];
+  while (stack.length) {
+    const childId = stack.pop();
+    count += 1;
+    stack.push(...(childrenByParent[childId] || []));
+  }
+  return count;
 }
 
 export default function GoalsPage() {
@@ -116,6 +137,27 @@ export default function GoalsPage() {
       const newGoal = await createGoal({ title: 'New Goal', parentId, category: null });
       await load();
       setAutoEditId(newGoal.id);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  // Confirmation copy differs by whether the node has descendants — counted
+  // from the `goals` already in hand (see countDescendants above), not a
+  // fresh query. On confirm, the DB's own goals_parent_id_fkey ON DELETE
+  // CASCADE (verified firing for real via Supabase MCP before this was
+  // written, not assumed from the schema) takes every descendant with it in
+  // the single deleteGoal() call — no per-descendant delete loop needed.
+  // Reuses the same load() refetch as every other write on this page.
+  const onDeleteGoal = async (id) => {
+    const descendantCount = countDescendants(goals, id);
+    const message = descendantCount > 0
+      ? `Delete this goal and its ${descendantCount} sub-goal${descendantCount === 1 ? '' : 's'}?`
+      : 'Delete this goal?';
+    if (!confirm(message)) return;
+    try {
+      await deleteGoal(id);
+      await load(); // no full page reload — refetches goals and re-renders without the deleted branch
     } catch (e) {
       setError(e.message);
     }
@@ -229,6 +271,7 @@ export default function GoalsPage() {
                 onToggleLeaf={onToggleLeaf}
                 onRename={onRename}
                 onAddSubgoal={onAddSubgoal}
+                onDeleteGoal={onDeleteGoal}
                 autoEditId={autoEditId}
                 onAutoEditConsumed={() => setAutoEditId(null)}
               />
