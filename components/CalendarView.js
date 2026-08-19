@@ -8,6 +8,7 @@
 // here, only the key->items state shape and the grid rendering are
 // calendar-specific).
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/router';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { fetchInstances, setInstanceStatus } from '@/lib/data';
 import { getTags } from '@/lib/tag-queries';
@@ -15,6 +16,7 @@ import { todayStr, addDays } from '@/lib/dates';
 import { useDragSensors, handleSharedDragEnd, useDragOverlayState, dragCollisionDetection } from '@/lib/dragAndDrop';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { getTagCardStyle } from '@/lib/tag-styles';
+import { isLifeFormulaEntryTask } from '@/lib/lifeFormulaLink';
 import { color, space, radius, border, font, elevation } from '@/lib/tokens';
 import { buttonSecondary, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
@@ -41,6 +43,7 @@ function keyToScheduledDate(key) {
 }
 
 export default function CalendarView() {
+  const router = useRouter();
   const { version, refresh } = useRefresh();
   const today = todayStr();
   const [{ year, month }, setYm] = useState(() => {
@@ -50,6 +53,15 @@ export default function CalendarView() {
   const [itemsByDate, setItemsByDate] = useState({});
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null);
+
+  // Same special-case routing as WeekBoardView — see lib/lifeFormulaLink.js.
+  const handleEdit = (instance) => {
+    if (isLifeFormulaEntryTask(instance)) {
+      router.push('/life-formula');
+      return;
+    }
+    setEditing(instance);
+  };
   // Tag filter: a SET of selected tag IDS (empty = no filtering). This
   // filters what's RENDERED per day, not itemsByDate itself — drag-and-drop
   // always operates on the full, unfiltered state so hidden items never get
@@ -250,7 +262,7 @@ export default function CalendarView() {
                   isLastRow={isLastRow}
                   isLastCol={isLastCol}
                   onToggleStatus={onToggleStatus}
-                  onEdit={setEditing}
+                  onEdit={handleEdit}
                 />
               );
             })}

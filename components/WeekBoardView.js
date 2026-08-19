@@ -16,12 +16,14 @@
 // sidebar uses (the v1 edit flow) — see the PointerSensor's activation
 // distance below and WeekBoardCard's click/drag split.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/router';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { getWeekDates, getInboxInstances, getColumnInstances } from '@/lib/board-queries';
 import { setInstanceStatus } from '@/lib/data';
 import { useDragSensors, handleSharedDragEnd, useDragOverlayState, dragCollisionDetection } from '@/lib/dragAndDrop';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { getTagCardStyle } from '@/lib/tag-styles';
+import { isLifeFormulaEntryTask } from '@/lib/lifeFormulaLink';
 import { color, space, radius, font, elevation } from '@/lib/tokens';
 import { card as cardStyle, buttonSecondary, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
@@ -51,12 +53,24 @@ function weekRangeLabel(week) {
 }
 
 export default function WeekBoardView() {
+  const router = useRouter();
   const { version, refresh } = useRefresh();
   const [refDate, setRefDate] = useState(() => new Date());
   const [itemsByColumn, setItemsByColumn] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null);
+
+  // The one recurring "Life Formula weekly entry" task routes straight to
+  // its own form (pages/life-formula.js) instead of the generic EditModal —
+  // see lib/lifeFormulaLink.js for how it's identified.
+  const handleEdit = (instance) => {
+    if (isLifeFormulaEntryTask(instance)) {
+      router.push('/life-formula');
+      return;
+    }
+    setEditing(instance);
+  };
 
   const week = useMemo(() => getWeekDates(refDate), [refDate]);
   const todayStr = useMemo(() => toDateStr(new Date()), []);
@@ -158,7 +172,7 @@ export default function WeekBoardView() {
       items={itemsByColumn[INBOX_KEY] || []}
       isInbox
       onToggleStatus={onToggleStatus}
-      onEdit={setEditing}
+      onEdit={handleEdit}
       onCreated={refresh}
     />
   );
@@ -241,7 +255,7 @@ export default function WeekBoardView() {
                     items={itemsByColumn[dateStr] || []}
                     isToday={dateStr === todayStr}
                     onToggleStatus={onToggleStatus}
-                    onEdit={setEditing}
+                    onEdit={handleEdit}
                     onCreated={refresh}
                   />
                 );

@@ -6,6 +6,7 @@
 // scheduled_date = today), so a drop only ever reorders position within
 // that one key, never moves across keys.
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/router';
 import { DndContext, closestCorners } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import {
@@ -16,6 +17,7 @@ import {
 import { useDragSensors, handleSharedDragEnd } from '@/lib/dragAndDrop';
 import { todayStr, humanDate } from '@/lib/dates';
 import { useIsMobile } from '@/lib/useIsMobile';
+import { isLifeFormulaEntryTask } from '@/lib/lifeFormulaLink';
 import { color, space, border } from '@/lib/tokens';
 import {
   input as inputStyle,
@@ -30,6 +32,7 @@ import EditModal from './EditModal';
 import { useRefresh } from './RefreshContext';
 
 export default function DailySidebar() {
+  const router = useRouter();
   const { version, refresh } = useRefresh();
   const [today] = useState(todayStr);
   const [tasks, setTasks] = useState([]);
@@ -40,6 +43,15 @@ export default function DailySidebar() {
   const [editing, setEditing] = useState(null);
   const isMobile = useIsMobile();
   const tasksContainerRef = useRef(null);
+
+  // Same special-case routing as Board/Calendar — see lib/lifeFormulaLink.js.
+  const handleEdit = (instance) => {
+    if (isLifeFormulaEntryTask(instance)) {
+      router.push('/life-formula');
+      return;
+    }
+    setEditing(instance);
+  };
 
   const load = useCallback(async () => {
     setError(null);
@@ -145,7 +157,7 @@ export default function DailySidebar() {
                   instance={t}
                   columnKey={today}
                   onSetStatus={onSetStatus}
-                  onEdit={setEditing}
+                  onEdit={handleEdit}
                 />
               ))}
             </SortableContext>
