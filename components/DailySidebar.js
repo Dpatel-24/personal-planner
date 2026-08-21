@@ -13,6 +13,7 @@ import {
   fetchInstancesForDateWithRollover,
   createOneOffTask,
   setInstanceStatus,
+  updateEstimatedDuration,
 } from '@/lib/data';
 import { useDragSensors, handleSharedDragEnd } from '@/lib/dragAndDrop';
 import { todayStr, humanDate } from '@/lib/dates';
@@ -90,6 +91,15 @@ export default function DailySidebar() {
     }
   };
 
+  const onUpdateDuration = async (id, minutes) => {
+    try {
+      await updateEstimatedDuration(id, minutes);
+      refresh(); // ScheduleRail's own independent fetch picks this up too, same as any other mutation
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   // Single-key wrapper around the flat `tasks` list so the shared drag
   // module (built around a key->items map) works unchanged here — `today`
   // is the only key that will ever exist in this view.
@@ -158,6 +168,7 @@ export default function DailySidebar() {
                   columnKey={today}
                   onSetStatus={onSetStatus}
                   onEdit={handleEdit}
+                  onUpdateDuration={onUpdateDuration}
                 />
               ))}
             </SortableContext>

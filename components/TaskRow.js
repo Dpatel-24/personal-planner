@@ -14,7 +14,13 @@ import { useTimer } from './TimerContext';
 import { useRefresh } from './RefreshContext';
 import { startTimer } from '@/lib/timer-queries';
 
-export default function TaskRow({ instance, columnKey, onSetStatus, onEdit }) {
+// Schedule Rail (V5) duration step size — matches the rail's own drag-
+// resize snap increment (Step 9), so a value set from either entry point
+// always lands on a grid line the other one also understands.
+const DURATION_STEP_MINUTES = 15;
+const MIN_DURATION_MINUTES = 15;
+
+export default function TaskRow({ instance, columnKey, onSetStatus, onEdit, onUpdateDuration }) {
   const [busy, setBusy] = useState(false);
   const [timerBusy, setTimerBusy] = useState(false);
   const done = instance.status === 'done';
@@ -99,6 +105,37 @@ export default function TaskRow({ instance, columnKey, onSetStatus, onEdit }) {
         {instance.template_id && <span style={badge}>recurring</span>}
         {skipped && <span style={{ ...badge, color: color.textMuted, background: color.bgMuted }}>skipped</span>}
       </span>
+      {/* Schedule Rail (V5) duration stepper — immediate write, no Save
+          button gate, same pattern the tag/checklist pickers already use
+          elsewhere in this app. Snaps in DURATION_STEP_MINUTES increments
+          so a value set here always lands on the same grid the rail's own
+          drag-resize (Step 9) understands. */}
+      {onUpdateDuration && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }} onPointerDown={(e) => e.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() =>
+              onUpdateDuration(instance.id, Math.max(MIN_DURATION_MINUTES, (instance.estimated_duration_minutes || MIN_DURATION_MINUTES) - DURATION_STEP_MINUTES))
+            }
+            disabled={(instance.estimated_duration_minutes || MIN_DURATION_MINUTES) <= MIN_DURATION_MINUTES}
+            aria-label="Decrease duration"
+            style={{ ...buttonGhost, padding: `0 ${space[1]}`, fontSize: font.size.sm }}
+          >
+            −
+          </button>
+          <span style={{ fontSize: font.size.xs, color: color.textMuted, minWidth: 32, textAlign: 'center' }}>
+            {instance.estimated_duration_minutes || MIN_DURATION_MINUTES}m
+          </span>
+          <button
+            type="button"
+            onClick={() => onUpdateDuration(instance.id, (instance.estimated_duration_minutes || MIN_DURATION_MINUTES) + DURATION_STEP_MINUTES)}
+            aria-label="Increase duration"
+            style={{ ...buttonGhost, padding: `0 ${space[1]}`, fontSize: font.size.sm }}
+          >
+            +
+          </button>
+        </div>
+      )}
       <button
         type="button"
         onClick={startTiming}

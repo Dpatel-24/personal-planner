@@ -8,6 +8,7 @@ import { useRouter } from 'next/router';
 import { color, space, border } from '@/lib/tokens';
 import AppNav from '@/components/AppNav';
 import DailySidebar from '@/components/DailySidebar';
+import ScheduleRail from '@/components/ScheduleRail';
 import WeekBoardView from '@/components/WeekBoardView';
 import CalendarView from '@/components/CalendarView';
 import TagManagerModal from '@/components/TagManagerModal';
@@ -81,7 +82,12 @@ export default function Home() {
             >
               {tab === 'Board' && <WeekBoardView />}
               {tab === 'Calendar' && <CalendarView />}
-              {tab === 'Today' && isMobile && <DailySidebar />}
+              {/* Schedule Rail V5: mobile's "Today" tab IS the rail — per
+                  explicit direction, not DailySidebar's plain list. Rail is
+                  standalone here (own header/add-task form/recurring
+                  button), since there's no companion DailySidebar on mobile
+                  to provide those. */}
+              {tab === 'Today' && isMobile && <ScheduleRail standalone />}
             </section>
           </main>
 
@@ -97,6 +103,11 @@ export default function Home() {
               <DailySidebar />
             </aside>
           )}
+
+          {/* Schedule Rail V5, desktop: narrow companion column next to
+              DailySidebar's list — NOT standalone, DailySidebar's own
+              header/add-task form already covers that here. */}
+          {!isMobile && <ScheduleRail />}
         </div>
 
         {managingTags && <TagManagerModal onClose={() => setManagingTags(false)} />}
