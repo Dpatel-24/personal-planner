@@ -63,7 +63,7 @@ export default function WeekBoardColumn({
   const itemIds = items.map((i) => i.id);
 
   return (
-    <div className="week-column" style={columnStyle}>
+    <div className="week-column" style={columnStyle} data-today={isToday ? 'true' : undefined}>
       <div style={headerStyle}>
         <span style={titleStyle}>{title}</span>
         <span style={{ ...textMuted, fontSize: font.size.xs }}>{items.length}</span>

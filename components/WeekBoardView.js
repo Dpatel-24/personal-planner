@@ -15,7 +15,7 @@
 // Clicking a card (no pointer movement) still opens the same EditModal the
 // sidebar uses (the v1 edit flow) — see the PointerSensor's activation
 // distance below and WeekBoardCard's click/drag split.
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { getWeekDates, getInboxInstances, getColumnInstances } from '@/lib/board-queries';
@@ -138,6 +138,44 @@ export default function WeekBoardView() {
     const scrollAmount = isMobile ? el.clientWidth * 0.6 : el.clientWidth * 0.9;
     el.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
   };
+
+  // Center today's column in the day-strip the FIRST time it's on screen —
+  // explicitly first-load only (not on every "This week" click), per what
+  // was asked. hasCenteredOnLoadRef never resets, so this fires at most
+  // once per mount regardless of how many times `loading`/`isCurrentWeek`
+  // flip afterward (a later refresh()-triggered reload must NOT re-snap the
+  // scroll position out from under someone mid-scroll).
+  //
+  // useLayoutEffect, not useEffect: runs before the browser paints, so there
+  // is no visible one-frame flash of the un-centered (scrollLeft: 0) layout
+  // before it snaps to center.
+  const hasCenteredOnLoadRef = useRef(false);
+  useLayoutEffect(() => {
+    if (hasCenteredOnLoadRef.current || loading || !isCurrentWeek) return;
+    const container = daysScrollRef.current;
+    const todayEl = container?.querySelector('[data-today="true"]');
+    if (!container || !todayEl) return;
+
+    // getBoundingClientRect(), not offsetLeft — offsetLeft is relative to
+    // the nearest POSITIONED ancestor, which may not be this scroll
+    // container at all, and would silently give a wrong offset here.
+    const containerRect = container.getBoundingClientRect();
+    const todayRect = todayEl.getBoundingClientRect();
+    const target =
+      container.scrollLeft +
+      (todayRect.left - containerRect.left) -
+      (container.clientWidth - todayRect.width) / 2;
+
+    // No `behavior: 'smooth'` — this is establishing the INITIAL position,
+    // not a user-triggered navigation, so it should never be seen animating.
+    // Native scrollLeft clamps automatically to [0, scrollWidth -
+    // clientWidth], which is exactly what gives Mon/Tue (not enough
+    // columns to the left to actually center) and Sun (not enough to the
+    // right) their correct, un-special-cased "pinned to the near edge"
+    // behavior for free.
+    container.scrollLeft = target;
+    hasCenteredOnLoadRef.current = true;
+  }, [loading, isCurrentWeek]);
 
   // Board's Inbox key maps to a null scheduled_date; every other key is
   // already a date string. See lib/dragAndDrop.js for the shared logic.
