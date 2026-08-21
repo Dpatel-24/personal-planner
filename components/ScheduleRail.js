@@ -1,25 +1,20 @@
 // ScheduleRail — Schedule Rail V5 (Tier 1 + Tier 2). Fixed-hour vertical
 // grid with today's tasks positioned by scheduled_start/
-// estimated_duration_minutes. Two contexts, one component:
+// estimated_duration_minutes. THE Today UI surface on both platforms — no
+// separate sidebar/list component exists anymore (both were deleted once
+// this fully replaced them):
 //
-// - Desktop (`standalone=false`, the default): a narrow companion column
-//   next to DailySidebar's list — DailySidebar still owns the "Today"
-//   header/add-task form/recurring button there.
-// - Mobile (`standalone=true`): per explicit direction, the rail itself
-//   IS the Today tab's content, replacing DailySidebar entirely — so in
-//   this mode it also renders its own header/add-task form/recurring
-//   button (duplicated from DailySidebar's JSX rather than extracted into
-//   a shared subcomponent — consistent with this feature's own stated
-//   scope: "extracting shared checkbox/timer/tag-dot subcomponents... is
-//   flagged as future tech debt, not part of this feature").
+// - Desktop (`standalone=false`, the default): a narrow companion column,
+//   used only where a caller explicitly wants the bare rail without its own
+//   header/add-task form.
+// - Both the desktop Today sidebar and mobile's Today tab pass
+//   `standalone` — the rail owns its own header/add-task form/recurring
+//   button in that mode (see pages/index.js).
 //
-// Independently fetches today's resolved instances via the same
-// fetchInstancesForDateWithRollover() DailySidebar uses, subscribed to the
-// same RefreshContext `version` — NOT prop-drilled from DailySidebar. This
-// mirrors how Board/Calendar/Sidebar already stay in sync today (each
-// fetches its own copy, all refresh() together), so checking a box here
-// updates DailySidebar instantly and vice versa without any new coupling
-// between the two components.
+// Independently fetches today's resolved instances via
+// fetchInstancesForDateWithRollover(), subscribed to RefreshContext
+// `version` — same pattern Board/Calendar already use (each fetches its own
+// copy, all refresh() together).
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import {
@@ -32,7 +27,7 @@ import { formatDuration } from '@/lib/timer-queries';
 import { todayStr, humanDate } from '@/lib/dates';
 import { isLifeFormulaEntryTask } from '@/lib/lifeFormulaLink';
 import { color, space, radius, border, font } from '@/lib/tokens';
-import { input as inputStyle, buttonPrimary, buttonSecondary, heading, textMuted } from '@/lib/components';
+import { input as inputStyle, buttonPrimary, buttonSecondary, buttonGhost, heading, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
 import RecurringCreateModal from './RecurringCreateModal';
 import EditModal from './EditModal';
@@ -43,7 +38,7 @@ export const PIXELS_PER_MINUTE = 1; // 60px per hour row
 const HOUR_HEIGHT = PIXELS_PER_MINUTE * 60;
 const RAIL_WIDTH = 200; // desktop companion-column width; standalone (mobile) ignores this and goes full width
 const MIN_BLOCK_HEIGHT = 18; // a 15-min block (15px) is otherwise too short to hold readable text
-const RESIZE_STEP_MINUTES = 15; // matches TaskRow's own stepper — a value set from either entry point lands on the same grid
+const RESIZE_STEP_MINUTES = 15; // shared grid — both the resize handle and the +/- stepper below snap/step by this, so a value set from either entry point lands on the same grid
 const RESIZE_SNAP_PX = RESIZE_STEP_MINUTES * PIXELS_PER_MINUTE;
 const MIN_DURATION_MINUTES = 15;
 
@@ -55,16 +50,19 @@ function formatHourLabel(hour) {
 
 // RailBlock — one task's positioned block, local to this file (not a shared
 // extraction — a new component built for this feature, not the same thing
-// as "extracting shared checkbox/timer/tag-dot subcomponents" the plan
-// flagged as out-of-scope tech debt). Owns the drag-resize gesture: a
-// pointer-capture drag on its bottom-edge handle gives LIVE visual feedback
-// (local dragHeight state) without writing to the DB on every pixel of
-// movement — only on pointer-up does it call onResizeCommit once with the
-// final, 15-min-snapped duration. Reuses the exact touchAction:'none' +
-// stopPropagation pattern TaskRow.js's own drag handling already
-// established (see TaskRow.js:63), per the plan's explicit instruction to
-// stay consistent with existing drag handling in this app.
-function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onResizeCommit }) {
+// as "extracting shared checkbox/timer/tag-dot subcomponents", still
+// out-of-scope tech debt). Two duration-editing entry points, ONE write
+// path — both call the parent's onDurationChange(id, minutes), which is the
+// same function regardless of which entry point triggered it, so there is
+// no separate/local-only state to drift out of sync with the DB:
+// - Drag-resize: pointer-capture drag on the bottom-edge handle gives LIVE
+//   visual feedback (local dragHeight state) without writing to the DB on
+//   every pixel of movement — only on pointer-up does it call
+//   onDurationChange once with the final, 15-min-snapped duration.
+// - +/- stepper: writes immediately on click, no Save-button gate, same
+//   pattern this app's other inline-edit controls (tag/checklist pickers)
+//   already use.
+function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurationChange }) {
   // Drag math is always computed against the TRUE duration-based height
   // (durationMin * PIXELS_PER_MINUTE), never the display-clamped height —
   // otherwise a short (e.g. 15-min, visually clamped to MIN_BLOCK_HEIGHT)
@@ -109,7 +107,7 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onResiz
     dragStateRef.current = null;
     setDragHeight(null);
     if (finalMinutes !== instance.estimated_duration_minutes) {
-      onResizeCommit(instance.id, finalMinutes);
+      onDurationChange(instance.id, finalMinutes);
     }
   };
 
@@ -177,6 +175,35 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onResiz
           {formatDuration(instance.tracked_seconds)}
         </span>
       )}
+      {/* Duration stepper — immediate write, no Save-button gate, calls the
+          SAME onDurationChange the resize handle below calls. This is the
+          restored replacement for the deleted sidebar's stepper; it does
+          not introduce a second write path. */}
+      <div
+        style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={() => onDurationChange(instance.id, Math.max(MIN_DURATION_MINUTES, durationMin - RESIZE_STEP_MINUTES))}
+          disabled={durationMin <= MIN_DURATION_MINUTES}
+          aria-label="Decrease duration"
+          title={`${durationMin}m`}
+          style={{ ...buttonGhost, padding: 0, width: 14, height: 14, fontSize: 10, lineHeight: 1, minWidth: 0 }}
+        >
+          −
+        </button>
+        <button
+          type="button"
+          onClick={() => onDurationChange(instance.id, durationMin + RESIZE_STEP_MINUTES)}
+          aria-label="Increase duration"
+          title={`${durationMin}m`}
+          style={{ ...buttonGhost, padding: 0, width: 14, height: 14, fontSize: 10, lineHeight: 1, minWidth: 0 }}
+        >
+          +
+        </button>
+      </div>
       {/* Drag-resize handle — bottom 6px strip of the block. */}
       <div
         onPointerDown={onHandlePointerDown}
@@ -190,7 +217,7 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onResiz
           right: 0,
           height: 6,
           cursor: 'ns-resize',
-          touchAction: 'none', // same reasoning as TaskRow.js:63 — without this, touch-drag fights the browser's native scroll gesture
+          touchAction: 'none', // without this, touch-drag fights the browser's native scroll gesture instead of starting the resize
         }}
       />
     </div>
@@ -263,10 +290,12 @@ export default function ScheduleRail({ standalone = false }) {
     }
   };
 
-  // Same write path as TaskRow's own stepper (Step 7) — one function,
-  // lib/data.js's updateEstimatedDuration, ever actually persists a
-  // duration change, regardless of which entry point triggered it.
-  const onResizeCommit = async (id, minutes) => {
+  // The ONE function that ever persists a duration change — lib/data.js's
+  // updateEstimatedDuration — regardless of which RailBlock entry point
+  // triggered it (drag-resize handle or the +/- stepper). Passed down as a
+  // single prop so both entry points share the same write path, not two
+  // separate ones that could drift out of sync.
+  const onDurationChange = async (id, minutes) => {
     try {
       await updateEstimatedDuration(id, minutes);
       refresh();
@@ -388,7 +417,7 @@ export default function ScheduleRail({ standalone = false }) {
                   durationMin={durationMin}
                   onToggleStatus={onToggleStatus}
                   onEdit={handleEdit}
-                  onResizeCommit={onResizeCommit}
+                  onDurationChange={onDurationChange}
                 />
               );
             })}
