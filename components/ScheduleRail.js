@@ -23,6 +23,7 @@ import {
   setInstanceStatus,
   updateEstimatedDuration,
 } from '@/lib/data';
+import { cascadeLater } from '@/lib/scheduling';
 import { formatDuration } from '@/lib/timer-queries';
 import { todayStr, humanDate } from '@/lib/dates';
 import { isLifeFormulaEntryTask } from '@/lib/lifeFormulaLink';
@@ -62,7 +63,19 @@ function formatHourLabel(hour) {
 // - +/- stepper: writes immediately on click, no Save-button gate, same
 //   pattern this app's other inline-edit controls (tag/checklist pickers)
 //   already use.
-function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurationChange }) {
+// - Whole-block move (rail_drag_cascade_plan.md Step 2 — PREVIEW ONLY, no
+//   commit yet; that's Step 3): pointer-down/move/up on the block's own
+//   outer div (distinct from the resize handle's own bottom-6px strip,
+//   which already stopPropagation()s its own pointerdown so the two never
+//   fire together). Every pointer-move past a small movement threshold
+//   calls onMovePreview(id, proposedStart) — the PARENT runs cascadeLater()
+//   against its in-memory task list and re-renders every affected block at
+//   its would-be position; nothing here touches the DB. On pointer-up,
+//   onMoveEnd() unconditionally clears the parent's preview state (Step 2
+//   never persists anything, dropped or not — the block simply reverts to
+//   its real, DB-backed position). A `moved` flag suppresses the click-to-
+//   edit that would otherwise fire right after a genuine drag's pointerup.
+function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurationChange, onMovePreview, onMoveEnd }) {
   // Drag math is always computed against the TRUE duration-based height
   // (durationMin * PIXELS_PER_MINUTE), never the display-clamped height —
   // otherwise a short (e.g. 15-min, visually clamped to MIN_BLOCK_HEIGHT)
@@ -111,6 +124,50 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
     }
   };
 
+  // Whole-block move — PREVIEW ONLY (Step 2). moveDragRef, not state: the
+  // preview itself lives in the PARENT (a move can shift SIBLING blocks
+  // too, which this component has no way to render on its own), so there's
+  // nothing to visually reflect locally here beyond tracking the gesture.
+  const moveDragRef = useRef(null); // { startY, startScheduledStart, moved } while dragging, else null
+  const suppressNextClickRef = useRef(false);
+
+  const onBlockPointerDown = (e) => {
+    moveDragRef.current = { startY: e.clientY, startScheduledStart: instance.scheduled_start, moved: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const onBlockPointerMove = (e) => {
+    if (!moveDragRef.current) return;
+    const deltaY = e.clientY - moveDragRef.current.startY;
+    if (!moveDragRef.current.moved && Math.abs(deltaY) < 3) return; // small jitter before a real drag starts shouldn't trigger a cascade computation
+    moveDragRef.current.moved = true;
+
+    // Snaps to the SAME 15-min grid the resize handle already uses — every
+    // scheduled_start in this app is already on that grid, so a move that
+    // landed off it would be a new, inconsistent kind of value.
+    const deltaMinutes = Math.round(deltaY / PIXELS_PER_MINUTE / RESIZE_STEP_MINUTES) * RESIZE_STEP_MINUTES;
+    const proposedStart = new Date(
+      new Date(moveDragRef.current.startScheduledStart).getTime() + deltaMinutes * 60000
+    );
+    onMovePreview(instance.id, proposedStart);
+  };
+
+  const onBlockPointerUp = () => {
+    if (!moveDragRef.current) return;
+    const wasMoved = moveDragRef.current.moved;
+    moveDragRef.current = null;
+    onMoveEnd(); // Step 2 never persists anything — dropped or not, this always reverts to the real DB-backed position
+    if (wasMoved) suppressNextClickRef.current = true; // don't also open EditModal from the click that follows this pointerup
+  };
+
+  const onBlockClick = () => {
+    if (suppressNextClickRef.current) {
+      suppressNextClickRef.current = false;
+      return;
+    }
+    onEdit(instance);
+  };
+
   return (
     <div
       style={{
@@ -129,14 +186,19 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
         border: `1px solid ${done ? color.border : color.accent}`,
         overflow: 'hidden',
         cursor: 'pointer',
+        touchAction: 'none', // same reasoning as the resize handle — without this, touch-drag fights the browser's native scroll gesture
       }}
-      onClick={() => onEdit(instance)}
+      onClick={onBlockClick}
+      onPointerDown={onBlockPointerDown}
+      onPointerMove={onBlockPointerMove}
+      onPointerUp={onBlockPointerUp}
     >
       <input
         type="checkbox"
         checked={done}
         onChange={() => onToggleStatus(instance.id, done ? 'todo' : 'done')}
         onClick={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
         style={{ flexShrink: 0 }}
         aria-label={done ? 'Mark not done' : 'Mark done'}
       />
@@ -243,6 +305,12 @@ export default function ScheduleRail({ standalone = false }) {
   const [title, setTitle] = useState('');
   const [showRecurring, setShowRecurring] = useState(false);
   const [editing, setEditing] = useState(null);
+  // rail_drag_cascade_plan.md Step 2 — PREVIEW ONLY. null when no
+  // whole-block drag is in progress; otherwise a Map(id -> ISO string) of
+  // every task cascadeLater() says would move if the drag were dropped
+  // right now, INCLUDING the dragged task's own new position. Never
+  // written to the DB from here — Step 3 owns the actual commit-on-drop.
+  const [dragPreview, setDragPreview] = useState(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -302,6 +370,30 @@ export default function ScheduleRail({ standalone = false }) {
     } catch (e) {
       setError(e.message);
     }
+  };
+
+  // Step 2: called on every qualifying pointer-move during a whole-block
+  // drag (see RailBlock's onBlockPointerMove). Runs cascadeLater() against
+  // the CURRENT in-memory `tasks` array only — no DB read, no DB write.
+  // A CascadeEndOfDayError (or any other failure) here just means "don't
+  // update the preview this tick" rather than crashing the drag; Step 3
+  // decides how an actual drop past the boundary should surface to the
+  // user, which is a real, different question from what a mid-drag preview
+  // tick should do when it happens to compute an invalid position.
+  const onMovePreview = (movedId, proposedStart) => {
+    try {
+      const result = cascadeLater(tasks, movedId, proposedStart);
+      setDragPreview(new Map(result.map((r) => [r.id, r.scheduled_start])));
+    } catch (e) {
+      console.error('[ScheduleRail] cascade preview skipped:', e.message);
+    }
+  };
+
+  // Step 2 never persists anything on release, dropped or not — always
+  // reverts every block to its real, DB-backed position. Step 3 replaces
+  // this with an actual commit before clearing.
+  const onMoveEnd = () => {
+    setDragPreview(null);
   };
 
   const hours = Array.from({ length: RAIL_END_HOUR - RAIL_START_HOUR }, (_, i) => RAIL_START_HOUR + i);
@@ -405,7 +497,12 @@ export default function ScheduleRail({ standalone = false }) {
             ))}
 
             {scheduledTasks.map((instance) => {
-              const startMin = minutesFromRailStart(new Date(instance.scheduled_start), railStart);
+              // dragPreview only ever contains entries that actually
+              // change (cascadeLater's own contract) — a task not in it
+              // renders at its real, DB-backed scheduled_start, same as
+              // when no drag is happening at all.
+              const effectiveStart = dragPreview?.get(instance.id) ?? instance.scheduled_start;
+              const startMin = minutesFromRailStart(new Date(effectiveStart), railStart);
               const durationMin = instance.estimated_duration_minutes || 15;
               const top = startMin * PIXELS_PER_MINUTE;
 
@@ -418,6 +515,8 @@ export default function ScheduleRail({ standalone = false }) {
                   onToggleStatus={onToggleStatus}
                   onEdit={handleEdit}
                   onDurationChange={onDurationChange}
+                  onMovePreview={onMovePreview}
+                  onMoveEnd={onMoveEnd}
                 />
               );
             })}
