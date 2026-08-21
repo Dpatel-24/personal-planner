@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { color, space, border } from '@/lib/tokens';
 import AppNav from '@/components/AppNav';
-import DailySidebar from '@/components/DailySidebar';
+import ScheduleRail from '@/components/ScheduleRail';
 import WeekBoardView from '@/components/WeekBoardView';
 import CalendarView from '@/components/CalendarView';
 import TagManagerModal from '@/components/TagManagerModal';
@@ -81,10 +81,20 @@ export default function Home() {
             >
               {tab === 'Board' && <WeekBoardView />}
               {tab === 'Calendar' && <CalendarView />}
-              {tab === 'Today' && isMobile && <DailySidebar />}
+              {/* Schedule Rail V5: the Today sidebar/tab IS the rail on
+                  both platforms now — no separate plain task-list view and
+                  no separate third rail column beside the sidebar. Rail is
+                  always standalone (owns its own header/add-task form/
+                  recurring button) since nothing else provides those
+                  anymore. */}
+              {tab === 'Today' && isMobile && <ScheduleRail standalone />}
             </section>
           </main>
 
+          {/* Desktop: the Today sidebar itself IS the rail (standalone) —
+              not a separate companion column beside a plain-list sidebar
+              anymore. Same component, same "standalone" mode mobile's
+              Today tab already uses above. */}
           {!isMobile && (
             <aside
               style={{
@@ -94,7 +104,7 @@ export default function Home() {
                 background: color.bg,
               }}
             >
-              <DailySidebar />
+              <ScheduleRail standalone />
             </aside>
           )}
         </div>
