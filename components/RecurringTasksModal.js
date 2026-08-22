@@ -20,7 +20,11 @@ export default function RecurringTasksModal({ onClose, onEditTask }) {
   const row = { display: 'flex', alignItems: 'flex-start', gap: space[2], padding: `${space[2]} 0`, borderBottom: `1px solid ${color.bgSubtle}` };
 
   return (
-    <Modal onClose={onClose}>
+    // Wider than this app's default 420px modal — this list packs title +
+    // description + rule + tag + an Edit button into one row per task, which
+    // was cramped at the default width. See the single-scroll-container note
+    // below for the other half of this fix.
+    <Modal onClose={onClose} width={640}>
       <div style={{ ...heading, marginBottom: space[1] }}>Recurring Tasks</div>
       <div style={{ ...textMuted, marginBottom: space[4] }}>
         All recurring task templates. Click Edit to modify.
@@ -31,7 +35,15 @@ export default function RecurringTasksModal({ onClose, onEditTask }) {
       {tasks.length === 0 ? (
         <div style={textMuted}>No recurring tasks.</div>
       ) : (
-        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+        // No inner maxHeight/overflowY here — Modal's own maxHeight:90vh +
+        // overflowY:auto already scrolls the whole modal body. A second,
+        // independent scroll container nested inside it (this div previously
+        // had its own maxHeight:400/overflowY:auto) is what let a row far
+        // down the list — e.g. "Bills" — end up in the dead zone between the
+        // two independently-scrolling boxes, unreachable/unclickable. One
+        // scroll container, and every row is reachable by scrolling the
+        // modal itself.
+        <div>
           {tasks.map((task) => (
             <div key={task.id} style={row}>
               <div style={{ flex: 1, minWidth: 0 }}>
