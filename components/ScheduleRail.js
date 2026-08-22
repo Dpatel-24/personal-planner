@@ -172,12 +172,18 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
     if (!moveDragRef.current) return;
     const { moved, currentProposedStart } = moveDragRef.current;
     moveDragRef.current = null;
-    onMoveEnd(); // clears the live preview immediately; onMoveCommit's own refresh() below brings the real DB-backed positions back
     if (moved && currentProposedStart) {
+      // onMoveCommit owns clearing the preview itself, AFTER it has applied
+      // the result to local task state — calling onMoveEnd() here first
+      // would clear the preview one tick before the optimistic update lands,
+      // producing exactly the revert-then-jump flash this was written to
+      // avoid (see onMoveCommit's own comment in the parent).
       onMoveCommit(instance.id, currentProposedStart);
+    } else {
+      // A plain tap (never crossed the movement threshold) commits nothing —
+      // same as Step 2, nothing to persist for a gesture that never moved.
+      onMoveEnd();
     }
-    // A plain tap (never crossed the movement threshold) commits nothing —
-    // same as Step 2, nothing to persist for a gesture that never moved.
   };
 
   return (
@@ -448,6 +454,20 @@ export default function ScheduleRail({ standalone = false }) {
   // and writes nothing — the drop is cancelled, the block reverts to its
   // real position, exactly the "stop and report, don't truncate or wrap"
   // behavior lib/scheduling.js's own contract already promises.
+  //
+  // Optimistic local update BEFORE the network write (latency fix, post-
+  // Step-4): apply cascadeLater's result straight onto `tasks` state and
+  // clear the preview in the SAME tick, so the blocks land at their final
+  // position immediately with no visible revert. Persist in the background,
+  // then refresh() to reconcile with the DB as source of truth — mirrors
+  // lib/dragAndDrop.js's handleSharedDragEnd (Board's own drag-and-drop),
+  // which already does update-local-state-first/persist-after/refresh-to-
+  // reconcile. Before this, clearing the preview and only THEN awaiting the
+  // write + a full fetchInstancesForDateWithRollover() refetch meant every
+  // drop flashed back to the stale pre-drag position for the whole
+  // round-trip. On write failure, refresh() (in the catch) discards the
+  // optimistic state and re-syncs to what's really in the DB — same
+  // success/failure symmetry Board's own version already has.
   const onMoveCommit = async (movedId, proposedStart) => {
     let result;
     try {
@@ -457,13 +477,17 @@ export default function ScheduleRail({ standalone = false }) {
       setDragPreview(null);
       return;
     }
+    const changedById = new Map(result.map((r) => [r.id, r.scheduled_start]));
+    setTasks((prev) =>
+      prev.map((t) => (changedById.has(t.id) ? { ...t, scheduled_start: changedById.get(t.id) } : t))
+    );
+    setDragPreview(null);
     try {
       await Promise.all(result.map(({ id, scheduled_start }) => updateScheduledStart(id, scheduled_start)));
       refresh();
     } catch (e) {
       setError(e.message);
-    } finally {
-      setDragPreview(null);
+      refresh(); // discard the optimistic state, re-sync to the true DB values
     }
   };
 
