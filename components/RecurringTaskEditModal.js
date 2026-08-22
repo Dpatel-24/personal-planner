@@ -1,9 +1,16 @@
 // RecurringTaskEditModal — edit a recurring task template's title,
-// description, default tag, and recurrence rule.
+// description, and recurrence rule. Does NOT edit the default tag or
+// checklist here anymore (2026-08 redesign) — those are set by opening any
+// one occurrence via the normal Edit-task flow and choosing "All
+// occurrences", which pushes that occurrence's CURRENT tag/checklist onto
+// the template and every eligible sibling in one retroactive step (see
+// lib/data.js's updateTemplateAll). The old template-level pickers here
+// (TemplateDefaultTagSection / ChecklistTemplateSection) only ever affected
+// occurrences generated AFTER the edit — silently non-retroactive, which
+// read as a bug from the outside (see CLAUDE.md decisions log).
 import { useEffect, useState } from 'react';
 import Modal from './Modal';
 import { getTaskTemplate, updateTaskTemplate } from '@/lib/tag-queries';
-import { TemplateDefaultTagSection } from './TagAssignSection';
 import { FREQUENCIES, buildRRule, describeRRule, weekdayCode, monthDay } from '@/lib/rrulePresets';
 import { color, space, font } from '@/lib/tokens';
 import { input as inputStyle, label as labelStyle, buttonPrimary, buttonSecondary, heading, textMuted } from '@/lib/components';
@@ -159,9 +166,11 @@ export default function RecurringTaskEditModal({ taskId, onClose, onSaved }) {
           </div>
         )}
 
-        <div style={field}>
-          <TemplateDefaultTagSection templateId={taskId} initialTagId={template?.default_tag_id} />
-        </div>
+        {template?.default_tag_id && (
+          <div style={{ ...field, ...textMuted, fontSize: font.size.xs }}>
+            Tag and checklist are set from any occurrence via Edit task → "All occurrences", not here.
+          </div>
+        )}
 
         {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
 

@@ -176,13 +176,29 @@ the rest.
 
 **Inheritance pattern, used identically for tag, checklist, and title/description.**
 A template holds the default/source of truth. `generateInstances` copies that
-default onto each newly created instance at generation time. Once copied, the
-instance is independently editable and template edits made afterward do not
-retroactively touch already-generated instances, they are disposable-until-touched,
-same logic as the regenerator. This applies to:
+default onto each newly created instance at generation time — a brand-new
+occurrence always starts from the template's CURRENT state. This applies to:
 - `default_tag_id` (template) → `tag_id` (instance)
 - `checklist_templates` (template) → `checklist_items` (instance), copied fresh
 - title/description (template) → instance fields, standard override behavior
+
+Once copied, an instance is independently editable (`overrideInstance`,
+`InstanceTagSection`, `ChecklistSection` all write directly to that one row).
+What happens to *already-generated* sibling instances when the template
+itself changes depends on how the edit is scoped, not on disposable-until-
+touched by default (revised 2026-08, see decisions log):
+- title/description are LIVE-joined at read time for any non-override
+  instance (`lib/data.js`'s `resolveInstance`) — a template edit shows up
+  everywhere immediately, no explicit push needed.
+- tag and checklist are NOT live-joined (an instance's `tag_id`/
+  `checklist_items` are real rows, not a view) — but choosing "All
+  occurrences" in `EditModal` explicitly and retroactively pushes the edited
+  occurrence's CURRENT tag_id and checklist onto the template's own defaults
+  AND every eligible sibling instance, full replace (`updateTemplateAll`).
+  "Eligible" = the same guard `generateInstances`' `reconcile()` already
+  uses: `is_override = false AND status = 'todo'`. Choosing "This occurrence
+  only" (`overrideInstance`, sets `is_override = true`) is the one thing
+  that stays permanently exempt from that push, in either direction.
 
 **Checklist completion is independent of task status.** Completing every
 checklist item does not auto-mark the task done.
@@ -209,7 +225,22 @@ sidebar) is currently open, not just on the card that started it.
   analytics needs every tracked minute attributable to exactly one category,
   multi-tag makes time attribution ambiguous.
 - Checklists are template-defined, copied fresh onto each generated instance.
-  Template edits do not retroactively touch already-generated instances.
+- (2026-08, revises the above and the original tag decision) "Apply to all
+  occurrences" now retroactively pushes the edited occurrence's current tag
+  and checklist onto the template's defaults and every eligible
+  (non-override, `status='todo'`) sibling instance, full replace. Reason:
+  the original copied-once-at-generation-time behavior for tag/checklist was
+  silently non-retroactive — setting a recurring task's tag or checklist
+  never appeared on any already-materialized occurrence, which for a ~90-day
+  generation window is effectively everything visible on Board/Calendar/
+  Sidebar. That read as a bug from the outside, twice, independently
+  (Life Formula's tag never showing; wanting one checklist definition to
+  govern a whole series). Removed the old template-level pickers that only
+  wrote the forward-only version of this (`TemplateDefaultTagSection`,
+  `ChecklistTemplateSection`) — tag/checklist for a whole series are now
+  only ever set by editing one real occurrence and choosing "All
+  occurrences," never from a template-only editor with no occurrence
+  attached.
 - Timer is single global state with auto-stop-on-new-start. Reason: a timer is
   a property of the user's current focus, not a per-task independent clock.
 - Time-blocked/hour-grid daily schedule view considered and rejected for V3.

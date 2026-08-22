@@ -6,7 +6,6 @@ import { useEffect, useState } from 'react';
 import Modal from './Modal';
 import { InstanceTagSection } from './TagAssignSection';
 import ChecklistSection from './ChecklistSection';
-import ChecklistTemplateSection from './ChecklistTemplateSection';
 import {
   updateOneOff,
   overrideInstance,
@@ -14,6 +13,7 @@ import {
   splitTemplate,
   deleteInstance,
 } from '@/lib/data';
+import { getChecklistItems } from '@/lib/checklist-queries';
 import { supabase } from '@/lib/supabaseClient';
 import { humanDate } from '@/lib/dates';
 import { color, space, font } from '@/lib/tokens';
@@ -30,7 +30,7 @@ import {
 const SCOPES = [
   ['single', 'This occurrence only', 'Detaches just this occurrence and edits it. The series is untouched.'],
   ['future', 'This and future', 'Ends the current series the day before, and starts a new one from this date.'],
-  ['all', 'All occurrences', 'Edits the series. Completed and individually-edited occurrences are kept.'],
+  ['all', 'All occurrences', 'Applies title, description, tag, and checklist here to every future occurrence. Completed and individually-edited occurrences are kept as-is.'],
 ];
 
 export default function EditModal({ instance, onClose, onSaved }) {
@@ -86,7 +86,24 @@ export default function EditModal({ instance, onClose, onSaved }) {
         }
         await splitTemplate(template, instance.scheduled_date, fields);
       } else {
-        await updateTemplateAll(instance.template_id, fields);
+        // "All occurrences": pull the CURRENT, just-saved state of tag and
+        // checklist for THIS instance fresh from the DB (both write
+        // instantly on change, independent of this Save button — see
+        // TagAssignSection/ChecklistSection — so by the time Save is
+        // clicked the DB already holds whatever the user last set) and push
+        // them out to the template + every eligible sibling occurrence,
+        // full replace. See lib/data.js's updateTemplateAll for the full
+        // reasoning and the is_override/status guard.
+        const [{ data: freshInstance, error: tagReadErr }, freshChecklist] = await Promise.all([
+          supabase.from('task_instances').select('tag_id').eq('id', instance.id).single(),
+          getChecklistItems(instance.id),
+        ]);
+        if (tagReadErr) throw tagReadErr;
+        await updateTemplateAll(instance.template_id, {
+          ...fields,
+          tagId: freshInstance.tag_id,
+          checklistItems: freshChecklist.map((item) => ({ text: item.text })),
+        });
       }
       onSaved();
       onClose();
@@ -136,13 +153,12 @@ export default function EditModal({ instance, onClose, onSaved }) {
 
         <div style={field}>
           <ChecklistSection instanceId={instance.id} />
+          {isRecurring && (
+            <div style={{ ...textMuted, fontSize: font.size.xs, marginTop: space[1] }}>
+              Choosing "All occurrences" below applies this checklist to every future occurrence.
+            </div>
+          )}
         </div>
-
-        {isRecurring && instance.template_id && (
-          <div style={field}>
-            <ChecklistTemplateSection templateId={instance.template_id} />
-          </div>
-        )}
 
         {!isRecurring && (
           <div style={field}>
