@@ -60,19 +60,25 @@ export default function RecurringTasksModal({ onClose, onEditTask }) {
                       }}
                     />
                   )}
-                  <div style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.text }}>
+                  <div style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.text, wordBreak: 'break-word' }}>
                     {task.title || '(untitled)'}
                   </div>
-                  <span style={{ fontSize: font.size.xs, color: color.textMuted, marginLeft: 'auto' }}>
+                  <span style={{ fontSize: font.size.xs, color: color.textMuted, marginLeft: 'auto', flexShrink: 0 }}>
                     {task.active ? 'Active' : 'Inactive'}
                   </span>
                 </div>
                 {task.description && (
-                  <div style={{ fontSize: font.size.sm, color: color.textMuted, marginBottom: space[1] }}>
+                  <div style={{ fontSize: font.size.sm, color: color.textMuted, marginBottom: space[1], wordBreak: 'break-word' }}>
                     {task.description}
                   </div>
                 )}
-                <div style={{ fontSize: font.size.xs, color: color.textMuted }}>
+                {/* wordBreak: an RRULE string ("FREQ=WEEKLY;BYDAY=SA") has no
+                    spaces — without an explicit break rule a long one can
+                    force this row wider than the modal, which is exactly
+                    what makes a fixed-width flex layout look "cut off": the
+                    row (and the Edit button pinned to its end) push past the
+                    modal's own edge instead of the text wrapping in place. */}
+                <div style={{ fontSize: font.size.xs, color: color.textMuted, wordBreak: 'break-word' }}>
                   Rule: {task.recurrence_rule || 'N/A'}
                 </div>
                 {task.defaultTagRow && (
