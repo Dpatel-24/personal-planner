@@ -22,6 +22,7 @@ import {
   createOneOffTask,
   setInstanceStatus,
   updateEstimatedDuration,
+  updateScheduledStart,
 } from '@/lib/data';
 import { cascadeLater } from '@/lib/scheduling';
 import { formatDuration } from '@/lib/timer-queries';
@@ -63,19 +64,30 @@ function formatHourLabel(hour) {
 // - +/- stepper: writes immediately on click, no Save-button gate, same
 //   pattern this app's other inline-edit controls (tag/checklist pickers)
 //   already use.
-// - Whole-block move (rail_drag_cascade_plan.md Step 2 — PREVIEW ONLY, no
-//   commit yet; that's Step 3): pointer-down/move/up on the block's own
-//   outer div (distinct from the resize handle's own bottom-6px strip,
-//   which already stopPropagation()s its own pointerdown so the two never
-//   fire together). Every pointer-move past a small movement threshold
-//   calls onMovePreview(id, proposedStart) — the PARENT runs cascadeLater()
+// - Whole-block move (rail_drag_cascade_plan.md Step 3): a dedicated grip
+//   handle ("≡"), NOT the whole block body — Step 2 had it on the outer
+//   div as an interim measure explicitly flagged as needing this exact
+//   replacement. The grip is its own small element with its own
+//   pointerdown/move/up + stopPropagation()/touchAction:'none', the same
+//   established pattern the resize handle already uses — a genuinely
+//   distinct hit area, so a plain click anywhere else on the card (title,
+//   tag, empty space) still opens EditModal exactly as before, with no
+//   suppression logic needed (unlike Step 2's interim version): the grip's
+//   own stopPropagation on click means a drag-and-release on the grip
+//   itself never reaches the outer div's onClick at all, same as the
+//   resize handle already doesn't.
+//   Every pointer-move past a small movement threshold calls
+//   onMovePreview(id, proposedStart) — the PARENT runs cascadeLater()
 //   against its in-memory task list and re-renders every affected block at
-//   its would-be position; nothing here touches the DB. On pointer-up,
-//   onMoveEnd() unconditionally clears the parent's preview state (Step 2
-//   never persists anything, dropped or not — the block simply reverts to
-//   its real, DB-backed position). A `moved` flag suppresses the click-to-
-//   edit that would otherwise fire right after a genuine drag's pointerup.
-function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurationChange, onMovePreview, onMoveEnd }) {
+//   its would-be position; nothing here touches the DB. On pointer-up, the
+//   LAST proposedStart computed during the drag (read from a ref, not
+//   React state, for the same closure-staleness reason the resize handle's
+//   own commit already established) is handed to onMoveCommit(id,
+//   proposedStart) — the parent re-runs the EXACT SAME cascadeLater() call
+//   the live preview already used and batches the result to the DB, so
+//   what was previewed is structurally guaranteed to be what persists, not
+//   a second derivation that could drift from it.
+function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurationChange, onMovePreview, onMoveEnd, onMoveCommit }) {
   // Drag math is always computed against the TRUE duration-based height
   // (durationMin * PIXELS_PER_MINUTE), never the display-clamped height —
   // otherwise a short (e.g. 15-min, visually clamped to MIN_BLOCK_HEIGHT)
@@ -124,19 +136,22 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
     }
   };
 
-  // Whole-block move — PREVIEW ONLY (Step 2). moveDragRef, not state: the
-  // preview itself lives in the PARENT (a move can shift SIBLING blocks
-  // too, which this component has no way to render on its own), so there's
-  // nothing to visually reflect locally here beyond tracking the gesture.
-  const moveDragRef = useRef(null); // { startY, startScheduledStart, moved } while dragging, else null
-  const suppressNextClickRef = useRef(false);
+  // Whole-block move, via the dedicated grip handle below — NOT the outer
+  // div (see the component comment above for why that changed from Step 2).
+  // moveDragRef, not state: the live preview itself lives in the PARENT (a
+  // move can shift SIBLING blocks too, which this component has no way to
+  // render on its own) — this ref only tracks the gesture and the latest
+  // computed proposedStart, the value onGripPointerUp commits with.
+  const moveDragRef = useRef(null); // { startY, startScheduledStart, moved, currentProposedStart } while dragging, else null
 
-  const onBlockPointerDown = (e) => {
-    moveDragRef.current = { startY: e.clientY, startScheduledStart: instance.scheduled_start, moved: false };
+  const onGripPointerDown = (e) => {
+    e.stopPropagation(); // don't also trigger the block's own onClick (opens EditModal) — same as the resize handle
+    e.preventDefault();
+    moveDragRef.current = { startY: e.clientY, startScheduledStart: instance.scheduled_start, moved: false, currentProposedStart: null };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
-  const onBlockPointerMove = (e) => {
+  const onGripPointerMove = (e) => {
     if (!moveDragRef.current) return;
     const deltaY = e.clientY - moveDragRef.current.startY;
     if (!moveDragRef.current.moved && Math.abs(deltaY) < 3) return; // small jitter before a real drag starts shouldn't trigger a cascade computation
@@ -149,23 +164,20 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
     const proposedStart = new Date(
       new Date(moveDragRef.current.startScheduledStart).getTime() + deltaMinutes * 60000
     );
+    moveDragRef.current.currentProposedStart = proposedStart;
     onMovePreview(instance.id, proposedStart);
   };
 
-  const onBlockPointerUp = () => {
+  const onGripPointerUp = () => {
     if (!moveDragRef.current) return;
-    const wasMoved = moveDragRef.current.moved;
+    const { moved, currentProposedStart } = moveDragRef.current;
     moveDragRef.current = null;
-    onMoveEnd(); // Step 2 never persists anything — dropped or not, this always reverts to the real DB-backed position
-    if (wasMoved) suppressNextClickRef.current = true; // don't also open EditModal from the click that follows this pointerup
-  };
-
-  const onBlockClick = () => {
-    if (suppressNextClickRef.current) {
-      suppressNextClickRef.current = false;
-      return;
+    onMoveEnd(); // clears the live preview immediately; onMoveCommit's own refresh() below brings the real DB-backed positions back
+    if (moved && currentProposedStart) {
+      onMoveCommit(instance.id, currentProposedStart);
     }
-    onEdit(instance);
+    // A plain tap (never crossed the movement threshold) commits nothing —
+    // same as Step 2, nothing to persist for a gesture that never moved.
   };
 
   return (
@@ -186,13 +198,37 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
         border: `1px solid ${done ? color.border : color.accent}`,
         overflow: 'hidden',
         cursor: 'pointer',
-        touchAction: 'none', // same reasoning as the resize handle — without this, touch-drag fights the browser's native scroll gesture
       }}
-      onClick={onBlockClick}
-      onPointerDown={onBlockPointerDown}
-      onPointerMove={onBlockPointerMove}
-      onPointerUp={onBlockPointerUp}
+      onClick={() => onEdit(instance)}
     >
+      {/* Drag-move grip — distinct hit area from the resize handle (bottom
+          6px strip) and from everything else in the flex row, per Step 3.
+          Its own stopPropagation()/touchAction:'none' means neither the
+          card's click-to-edit nor the browser's native touch-scroll ever
+          fights this gesture. */}
+      <div
+        onPointerDown={onGripPointerDown}
+        onPointerMove={onGripPointerMove}
+        onPointerUp={onGripPointerUp}
+        onClick={(e) => e.stopPropagation()}
+        aria-label="Drag to move"
+        title="Drag to move"
+        style={{
+          flexShrink: 0,
+          width: 14,
+          height: 14,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'grab',
+          color: color.textMuted,
+          fontSize: 10,
+          lineHeight: 1,
+          touchAction: 'none', // same reasoning as the resize handle — without this, touch-drag fights the browser's native scroll gesture
+        }}
+      >
+        ≡
+      </div>
       <input
         type="checkbox"
         checked={done}
@@ -305,11 +341,12 @@ export default function ScheduleRail({ standalone = false }) {
   const [title, setTitle] = useState('');
   const [showRecurring, setShowRecurring] = useState(false);
   const [editing, setEditing] = useState(null);
-  // rail_drag_cascade_plan.md Step 2 — PREVIEW ONLY. null when no
-  // whole-block drag is in progress; otherwise a Map(id -> ISO string) of
-  // every task cascadeLater() says would move if the drag were dropped
-  // right now, INCLUDING the dragged task's own new position. Never
-  // written to the DB from here — Step 3 owns the actual commit-on-drop.
+  // Live whole-block-drag preview. null when no drag is in progress;
+  // otherwise a Map(id -> ISO string) of every task cascadeLater() says
+  // would move if the drag were dropped right now, INCLUDING the dragged
+  // task's own new position. Rendering-only — the actual DB write happens
+  // in onMoveCommit below, via a separate cascadeLater() call at drop time,
+  // not from this state.
   const [dragPreview, setDragPreview] = useState(null);
 
   const load = useCallback(async () => {
@@ -372,14 +409,15 @@ export default function ScheduleRail({ standalone = false }) {
     }
   };
 
-  // Step 2: called on every qualifying pointer-move during a whole-block
-  // drag (see RailBlock's onBlockPointerMove). Runs cascadeLater() against
-  // the CURRENT in-memory `tasks` array only — no DB read, no DB write.
-  // A CascadeEndOfDayError (or any other failure) here just means "don't
-  // update the preview this tick" rather than crashing the drag; Step 3
-  // decides how an actual drop past the boundary should surface to the
-  // user, which is a real, different question from what a mid-drag preview
-  // tick should do when it happens to compute an invalid position.
+  // Called on every qualifying pointer-move during a whole-block drag (see
+  // RailBlock's onGripPointerMove). Runs cascadeLater() against the CURRENT
+  // in-memory `tasks` array only — no DB read, no DB write. A
+  // CascadeEndOfDayError (or any other failure) here just means "don't
+  // update the preview this tick" rather than crashing the drag —
+  // onMoveCommit below is what decides how an actual DROP past the
+  // boundary surfaces to the user, a different question from what a
+  // mid-drag preview tick should do when it happens to compute an invalid
+  // position.
   const onMovePreview = (movedId, proposedStart) => {
     try {
       const result = cascadeLater(tasks, movedId, proposedStart);
@@ -389,11 +427,44 @@ export default function ScheduleRail({ standalone = false }) {
     }
   };
 
-  // Step 2 never persists anything on release, dropped or not — always
-  // reverts every block to its real, DB-backed position. Step 3 replaces
-  // this with an actual commit before clearing.
+  // Called on every pointer-up regardless of whether anything actually
+  // moved — always clears the live preview immediately, giving instant
+  // visual feedback rather than waiting on onMoveCommit's own async
+  // refresh() to bring the real values back (same brief "revert then
+  // re-settle" beat the resize handle's dragHeight clear already has).
   const onMoveEnd = () => {
     setDragPreview(null);
+  };
+
+  // Step 3: the ACTUAL commit — runs the EXACT SAME cascadeLater() call
+  // onMovePreview already used for the live preview (not a second
+  // derivation that could drift from what was shown), then batches every
+  // changed row into the DB via Promise.all of individual
+  // updateScheduledStart() calls — this app's established multi-row-write
+  // pattern (see lib/scheduling.js's assignTodaySchedule, same reasoning:
+  // Supabase has no true bulk upsert-by-id-list for arbitrary per-row
+  // values without a temp table). A CascadeEndOfDayError here (an ACTUAL
+  // drop, not just a preview tick) surfaces via the existing error banner
+  // and writes nothing — the drop is cancelled, the block reverts to its
+  // real position, exactly the "stop and report, don't truncate or wrap"
+  // behavior lib/scheduling.js's own contract already promises.
+  const onMoveCommit = async (movedId, proposedStart) => {
+    let result;
+    try {
+      result = cascadeLater(tasks, movedId, proposedStart);
+    } catch (e) {
+      setError(e.message);
+      setDragPreview(null);
+      return;
+    }
+    try {
+      await Promise.all(result.map(({ id, scheduled_start }) => updateScheduledStart(id, scheduled_start)));
+      refresh();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDragPreview(null);
+    }
   };
 
   const hours = Array.from({ length: RAIL_END_HOUR - RAIL_START_HOUR }, (_, i) => RAIL_START_HOUR + i);
@@ -517,6 +588,7 @@ export default function ScheduleRail({ standalone = false }) {
                   onDurationChange={onDurationChange}
                   onMovePreview={onMovePreview}
                   onMoveEnd={onMoveEnd}
+                  onMoveCommit={onMoveCommit}
                 />
               );
             })}
