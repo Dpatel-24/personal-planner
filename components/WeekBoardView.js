@@ -28,6 +28,7 @@ import { color, space, radius, font, elevation } from '@/lib/tokens';
 import { card as cardStyle, buttonSecondary, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
 import WeekBoardColumn from './WeekBoardColumn';
+import WeekSprintBar from './WeekSprintBar';
 import EditModal from './EditModal';
 
 const INBOX_KEY = 'inbox';
@@ -217,6 +218,8 @@ export default function WeekBoardView() {
 
   return (
     <div>
+      <WeekSprintBar weekStartStr={toDateStr(week[0])} />
+
       <div
         style={{
           display: 'flex',

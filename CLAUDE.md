@@ -13,7 +13,9 @@ log). Incomplete tasks roll into today automatically via a computed query,
 not a data mutation. Checklists, single-select tags, and manual time
 tracking are live. Analytics (originally planned as V4) was never started
 and remains deferred — no schema blockers, reads only existing tag_id/
-time_entries data whenever it happens.
+time_entries data whenever it happens. The Board also has a small "week
+sprint focus" bar (see below) — a free-text label for whatever one thing
+that week is deliberately focused on.
 
 Two other features exist in this app (`goals`, `life_formula_entries`
 tables; `/goals` and `/life-formula` pages) that this file has never
@@ -71,6 +73,19 @@ from landing before 8 AM either. Not touched because it wasn't reported as a
 problem and the fix depends on actual intent (align the floor to 6 AM, or
 keep 8 AM as the real floor and shrink the grid's visible start to match) —
 ask before changing either constant.
+
+## Week sprint focus
+`week_sprints` table, one row per calendar week (keyed by that week's
+Monday, `lib/board-queries.js`'s `getWeekDates()[0]`), each holding a single
+free-text `focus` string. Rendered as `components/WeekSprintBar.js` — a
+small amber-tinted bar above the Board's "Week of ..." header
+(`WeekBoardView.js`), plain text input, saves on blur (or Enter), no Save
+button. Amber (`color.warning`) specifically to look visually distinct from
+the app's usual accent purple used everywhere else, so it reads as its own
+kind of signal. Saved permanently, not just a single overwritten value —
+Prev/Next on the board shows each week's own focus (or the empty
+placeholder, if that week never had one set). Purely a manual label; nothing
+else in the app reads, derives from, or reports on it.
 
 ## Anti-goals (current)
 - No multi-user support, sharing, or team features
@@ -188,6 +203,14 @@ create unique index one_active_timer on time_entries ((true)) where ended_at is 
 -- treats every NULL as distinct for uniqueness purposes. Indexing (true)
 -- means every open row collides on the same value, so a second one is a
 -- real, DB-enforced violation. Enforcement lives here, not in application code.
+
+-- V5 addition
+create table week_sprints (
+  id uuid primary key default gen_random_uuid(),
+  week_start date not null unique,  -- that week's Monday
+  focus text not null default '',
+  updated_at timestamptz not null default now()
+);
 
 create or replace function start_timer(p_instance_id uuid)
 returns time_entries
