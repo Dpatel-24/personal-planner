@@ -129,16 +129,12 @@ export default function WeekBoardView() {
   // at once alongside Inbox and the sidebar, so this lets you page through
   // them; on mobile Inbox joins the same scroll strip as the first card
   // instead, since a pinned column plus a sliver of scrollable space doesn't
-  // work on a phone-width screen). Scroll amount is the container's own
-  // width, not a fixed pixel constant, so it's correct at any column width.
-  // On mobile, reduce scroll amount to make scrolling more granular.
+  // work on a phone-width screen). Plain native horizontal scroll/swipe on
+  // this container is the only way to page through days now — the explicit
+  // ‹ Week › scroll-nav buttons that used to sit above it were removed as
+  // redundant (the scroll itself already does the job) and that slot now
+  // holds the WeekSprintBar instead.
   const daysScrollRef = useRef(null);
-  const scrollDays = (direction) => {
-    const el = daysScrollRef.current;
-    if (!el) return;
-    const scrollAmount = isMobile ? el.clientWidth * 0.6 : el.clientWidth * 0.9;
-    el.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
-  };
 
   // Center today's column in the day-strip the FIRST time it's on screen —
   // explicitly first-load only (not on every "This week" click), per what
@@ -195,12 +191,6 @@ export default function WeekBoardView() {
   };
 
   const navBtn = { ...buttonSecondary, padding: `${space[1]} ${space[3]}` };
-  const dayScrollBtn = {
-    ...buttonSecondary,
-    padding: `${space[1]} ${space[2]}`,
-    fontWeight: font.weight.semibold,
-    lineHeight: font.lineHeight.tight,
-  };
 
   if (loading) return <div style={textMuted}>Loading…</div>;
 
@@ -218,8 +208,6 @@ export default function WeekBoardView() {
 
   return (
     <div>
-      <WeekSprintBar weekStartStr={toDateStr(week[0])} />
-
       <div
         style={{
           display: 'flex',
@@ -269,17 +257,9 @@ export default function WeekBoardView() {
           {!isMobile && inboxColumn}
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: space[2], marginBottom: space[2] }}>
-              <button style={dayScrollBtn} onClick={() => scrollDays(-1)} aria-label="Scroll days left">
-                ‹
-              </button>
-              <span style={{ fontSize: font.size.sm, fontWeight: font.weight.medium, color: color.textMuted }}>
-                Week
-              </span>
-              <button style={dayScrollBtn} onClick={() => scrollDays(1)} aria-label="Scroll days right">
-                ›
-              </button>
-            </div>
+            {/* WeekSprintBar carries its own marginBottom — no extra
+                wrapper spacing needed here. */}
+            <WeekSprintBar weekStartStr={toDateStr(week[0])} />
             <div
               ref={daysScrollRef}
               className="scrollbar-hidden"

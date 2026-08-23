@@ -78,9 +78,13 @@ ask before changing either constant.
 `week_sprints` table, one row per calendar week (keyed by that week's
 Monday, `lib/board-queries.js`'s `getWeekDates()[0]`), each holding a single
 free-text `focus` string. Rendered as `components/WeekSprintBar.js` — a
-small amber-tinted bar above the Board's "Week of ..." header
-(`WeekBoardView.js`), plain text input, saves on blur (or Enter), no Save
-button. Amber (`color.warning`) specifically to look visually distinct from
+small amber-tinted "Sprint:" bar directly above the day-columns scroll strip
+(`WeekBoardView.js`, scoped to that column, not spanning the Inbox column
+too), plain text input, saves on blur (or Enter), no Save button. Sits where
+an explicit ‹ Week › scroll-nav row used to be — removed as redundant once
+this landed, since the day-columns strip already scrolls natively; that's
+the only reason this bar lives exactly there rather than up by the "Week
+of ..." header itself, where it started. Amber (`color.warning`) specifically to look visually distinct from
 the app's usual accent purple used everywhere else, so it reads as its own
 kind of signal. Saved permanently, not just a single overwritten value —
 Prev/Next on the board shows each week's own focus (or the empty

@@ -78,7 +78,7 @@ export default function WeekSprintBar({ weekStartStr }) {
           letterSpacing: 0.5,
         }}
       >
-        This week's focus
+        Sprint:
       </span>
       <input
         value={focus}
