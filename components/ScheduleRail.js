@@ -35,7 +35,7 @@ import RecurringCreateModal from './RecurringCreateModal';
 import EditModal from './EditModal';
 
 const RAIL_START_HOUR = 6; // 6:00 AM
-const RAIL_END_HOUR = 21; // 9:00 PM (exclusive top of the last hour row) — grid's minimum height; real content can extend past this if tasks run later, see railHeight below
+const RAIL_END_HOUR = 24; // midnight (exclusive top of the last hour row, i.e. the grid's bottom edge lands exactly at midnight) — grid's minimum height; real content can extend past this if tasks run later, see railHeight below. Mirrored by lib/scheduling.js's CASCADE_END_OF_DAY_HOUR — keep the two in sync, see that constant's own comment.
 export const PIXELS_PER_MINUTE = 1; // 60px per hour row
 const HOUR_HEIGHT = PIXELS_PER_MINUTE * 60;
 const RAIL_WIDTH = 200; // desktop companion-column width; standalone (mobile) ignores this and goes full width
