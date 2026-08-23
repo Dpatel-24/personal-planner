@@ -92,15 +92,23 @@ placeholder, if that week never had one set). Purely a manual label; nothing
 else in the app reads, derives from, or reports on it, other than the
 Calendar's read-only history view below.
 
-**Calendar's sprint history.** `CalendarView.js` shows the same weeks' sprints
-too, read-only, as a full-grid-width row (`gridColumn: '1 / -1'`) inserted
-right after each week-row's 7th (Sunday) day cell — spans all 7 columns but
-styled like `CalendarChip.js` itself (`radius.sm` corners, inset margin on
-all sides), not a flush edge-to-edge divider — reads as one task chip
-stretched across the whole week, not a fixed banner row. Only rendered when
-that week actually has a focus set (`lib/sprint-queries.js`'s
-`getWeekSprintsInRange`, one query for the whole visible month) — a week
-with nothing set shows no bar at all, not an empty one.
+**Calendar's sprint history.** `CalendarView.js` shows the same weeks'
+sprints too, read-only. Each week-row is THREE stacked pieces, in this
+order: (1) 7 date-number badges, (2) one optional full-width sprint chip,
+(3) 7 task cells (`CalendarDayCell.js`) — not a banner trailing after the
+week, but slotted directly underneath that week's dates and above its
+tasks, in the same visual block (2026-08 redesign; it originally rendered
+AFTER the day cells, which read as belonging to the wrong week). The date
+badge used to live inside `CalendarDayCell.js` itself; it was pulled out
+into `CalendarView.js`'s own render loop specifically to make room for the
+sprint chip to sit between date and tasks — `CalendarDayCell.js` is now
+tasks-only (droppable + chips), no date rendering, no `isToday` prop.
+Sized and styled like `CalendarChip.js` itself (`radius.sm` corners, 1px
+vertical padding, `fontSize.xs`) rather than a full-height banner — "same
+size as a task card... thin." Only rendered when that week actually has a
+focus set (`lib/sprint-queries.js`'s `getWeekSprintsInRange`, one query for
+the whole visible month) — a week with nothing set shows no chip and no gap,
+not an empty placeholder row.
 
 **Calendar's grid is Monday-first**, matching Board's own Mon-Sun week
 (`lib/board-queries.js`'s `getWeekDates()`) — both `buildGrid`'s own
