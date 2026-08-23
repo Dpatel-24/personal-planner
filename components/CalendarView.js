@@ -7,11 +7,12 @@
 // WeekBoardView uses (see that module; the decision logic is not duplicated
 // here, only the key->items state shape and the grid rendering are
 // calendar-specific).
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { fetchInstances, setInstanceStatus } from '@/lib/data';
 import { getTags } from '@/lib/tag-queries';
+import { getWeekSprintsInRange } from '@/lib/sprint-queries';
 import { todayStr, addDays } from '@/lib/dates';
 import { useDragSensors, handleSharedDragEnd, useDragOverlayState, dragCollisionDetection } from '@/lib/dragAndDrop';
 import { useIsMobile } from '@/lib/useIsMobile';
@@ -95,6 +96,20 @@ export default function CalendarView() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Sprint history — one row per week_sprints row whose week_start falls
+  // anywhere in this grid. `from`/`to` are the grid's own first/last cell
+  // (a Sunday and a Saturday respectively, per buildGrid's Sun=0 week
+  // convention) — every week-row's own Monday necessarily falls inside that
+  // range, so no separate Monday-only bounds computation is needed here.
+  // Keyed on version too, same as `load` above, so setting a sprint on the
+  // Board shows up here without a manual reload.
+  const [sprintsByWeek, setSprintsByWeek] = useState({});
+  useEffect(() => {
+    getWeekSprintsInRange(from, to)
+      .then(setSprintsByWeek)
+      .catch((e) => setError(e.message));
+  }, [from, to, version]);
 
   // Refetch the global tag list whenever data changes (version), so a
   // newly-created tag shows up in the dropdown without a full page reload.
@@ -247,23 +262,67 @@ export default function CalendarView() {
               const isLastRow = i >= days.length - 7;
               const isLastCol = i % 7 === 6;
               const dayItems = itemsByDate[day] || [];
+              // Sprint history bar: rendered once per week-ROW, right after
+              // that row's 7th (Saturday) cell, so it sits directly beneath
+              // that week's day cells and spans the full grid width (7
+              // columns) rather than living inside any one day's cell like
+              // a task chip does — per direct request, "same style [as the
+              // Board bar], but stretches across the entire week." `day` at
+              // this point IS that row's Saturday (i % 7 === 6); the row's
+              // own Monday — week_sprints' key — is two days earlier.
+              // gridColumn:'1 / -1' is what makes a grid item span every
+              // column instead of occupying just one auto-placed cell; CSS
+              // grid auto-flow naturally starts it on a fresh row since the
+              // preceding 7 day-cells already fill the current one exactly.
+              const weekMonday = isLastCol ? addDays(day, -5) : null;
+              const weekFocus = weekMonday ? sprintsByWeek[weekMonday] : null;
               return (
-                <CalendarDayCell
-                  key={day}
-                  dateStr={day}
-                  dayNum={dayNum}
-                  inMonth={inMonth}
-                  isToday={isToday}
-                  items={
-                    selectedTags.size > 0
-                      ? dayItems.filter((i) => i.tag_id && selectedTags.has(i.tag_id))
-                      : dayItems
-                  }
-                  isLastRow={isLastRow}
-                  isLastCol={isLastCol}
-                  onToggleStatus={onToggleStatus}
-                  onEdit={handleEdit}
-                />
+                <Fragment key={day}>
+                  <CalendarDayCell
+                    dateStr={day}
+                    dayNum={dayNum}
+                    inMonth={inMonth}
+                    isToday={isToday}
+                    items={
+                      selectedTags.size > 0
+                        ? dayItems.filter((i) => i.tag_id && selectedTags.has(i.tag_id))
+                        : dayItems
+                    }
+                    isLastRow={isLastRow}
+                    isLastCol={isLastCol}
+                    onToggleStatus={onToggleStatus}
+                    onEdit={handleEdit}
+                  />
+                  {weekFocus && (
+                    <div
+                      style={{
+                        gridColumn: '1 / -1',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: space[2],
+                        padding: `${space[1]} ${space[3]}`,
+                        background: 'rgba(217, 119, 6, 0.12)', // color.warning at 12% — same tint WeekSprintBar.js uses
+                        borderBottom: isLastRow ? border.none : border.default,
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: font.size.xs,
+                          fontWeight: font.weight.semibold,
+                          color: color.warning,
+                          flexShrink: 0,
+                          textTransform: 'uppercase',
+                          letterSpacing: 0.5,
+                        }}
+                      >
+                        Sprint:
+                      </span>
+                      <span style={{ fontSize: font.size.sm, color: color.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {weekFocus}
+                      </span>
+                    </div>
+                  )}
+                </Fragment>
               );
             })}
           </div>

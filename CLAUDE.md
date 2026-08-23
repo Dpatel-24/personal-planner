@@ -89,7 +89,20 @@ the app's usual accent purple used everywhere else, so it reads as its own
 kind of signal. Saved permanently, not just a single overwritten value —
 Prev/Next on the board shows each week's own focus (or the empty
 placeholder, if that week never had one set). Purely a manual label; nothing
-else in the app reads, derives from, or reports on it.
+else in the app reads, derives from, or reports on it, other than the
+Calendar's read-only history view below.
+
+**Calendar's sprint history.** `CalendarView.js` shows the same weeks' sprints
+too, read-only, as a full-grid-width row (`gridColumn: '1 / -1'`) inserted
+right after each week-row's 7th (Saturday) day cell — spans the whole width
+like a divider between weeks, not confined to one day's cell the way a task
+chip is. Only rendered when that week actually has a focus set (`lib/sprint-
+queries.js`'s `getWeekSprintsInRange`, one query for the whole visible
+month) — a week with nothing set shows no bar at all, not an empty one.
+Calendar's grid weeks are Sunday-anchored (`buildGrid`'s `firstWeekday`, JS
+`getDay()` Sun=0) while `week_sprints.week_start` is always a Monday (Board's
+own Mon-Sun convention) — the row's Monday is worked out as that row's
+Saturday cell minus 5 days, not assumed to be the row's first cell.
 
 ## Anti-goals (current)
 - No multi-user support, sharing, or team features
