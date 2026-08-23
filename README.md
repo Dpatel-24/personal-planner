@@ -27,9 +27,20 @@ goes instead of guessing.
 - **Weekly board.** Seven day columns with real dates, plus an Inbox for
   anything not yet scheduled. Drag cards between days, drag within a day to
   reorder.
+- **Daily schedule rail.** An hour-by-hour view of today, 6 AM to midnight.
+  Drag a task onto it to give it a real time slot, drag it again to move or
+  resize. Drop it on an occupied slot and everything after shifts later
+  automatically, never overlapping, never earlier than the drop. A line
+  tracks the actual current time as the day goes.
+- **Weekly sprint focus.** One thing to deliberately focus on each week,
+  set once on the board, shown there and on the calendar as a small marker
+  so it stays visible instead of getting lost in the task list.
 - **Recurring tasks.** Weekly, biweekly, monthly, or custom recurrence rules.
   Edit or drag one occurrence, this week and every week after, or the whole
-  series, your choice, every time.
+  series, your choice, every time. Applying a change to the whole series
+  (including its checklist and tag) reaches every future occurrence, not
+  just new ones generated afterward. Deleting a recurring task removes its
+  occurrences too, not just the template.
 - **Automatic rollover.** Anything left unfinished shows up in today's column
   automatically. Nothing is silently rewritten, the original schedule stays
   intact.
