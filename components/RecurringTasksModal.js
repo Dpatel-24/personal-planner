@@ -17,13 +17,15 @@ export default function RecurringTasksModal({ onClose, onEditTask }) {
       .catch((e) => setError(e.message));
   }, []);
 
-  const row = { display: 'flex', alignItems: 'flex-start', gap: space[2], padding: `${space[2]} 0`, borderBottom: `1px solid ${color.bgSubtle}` };
+  // Desktop-only tool, used rarely — plain vertical block per row instead of
+  // a flex row with a pinned Edit button. Nothing here ever sits side by
+  // side with anything else competing for the same horizontal space, so
+  // there is no width/shrink/wrap interaction left to get wrong: every line
+  // is just as wide as the modal itself, full stop, at any desktop size.
+  const row = { padding: `${space[2]} 0`, borderBottom: `1px solid ${color.bgSubtle}` };
+  const line = { fontSize: font.size.xs, color: color.textMuted, marginTop: space[1] };
 
   return (
-    // Wider than this app's default 420px modal — this list packs title +
-    // description + rule + tag + an Edit button into one row per task, which
-    // was cramped at the default width. See the single-scroll-container note
-    // below for the other half of this fix.
     <Modal onClose={onClose} width={640}>
       <div style={{ ...heading, marginBottom: space[1] }}>Recurring Tasks</div>
       <div style={{ ...textMuted, marginBottom: space[4] }}>
@@ -46,51 +48,33 @@ export default function RecurringTasksModal({ onClose, onEditTask }) {
         <div>
           {tasks.map((task) => (
             <div key={task.id} style={row}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: space[1], marginBottom: space[1] }}>
-                  {task.defaultTagRow && (
-                    <span
-                      title={task.defaultTagRow.name}
-                      style={{
-                        width: 8,
-                        height: 8,
-                        borderRadius: radius.full,
-                        background: task.defaultTagRow.color || color.accent,
-                        flexShrink: 0,
-                      }}
-                    />
-                  )}
-                  <div style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.text, wordBreak: 'break-word' }}>
-                    {task.title || '(untitled)'}
-                  </div>
-                  <span style={{ fontSize: font.size.xs, color: color.textMuted, marginLeft: 'auto', flexShrink: 0 }}>
-                    {task.active ? 'Active' : 'Inactive'}
-                  </span>
-                </div>
-                {task.description && (
-                  <div style={{ fontSize: font.size.sm, color: color.textMuted, marginBottom: space[1], wordBreak: 'break-word' }}>
-                    {task.description}
-                  </div>
-                )}
-                {/* wordBreak: an RRULE string ("FREQ=WEEKLY;BYDAY=SA") has no
-                    spaces — without an explicit break rule a long one can
-                    force this row wider than the modal, which is exactly
-                    what makes a fixed-width flex layout look "cut off": the
-                    row (and the Edit button pinned to its end) push past the
-                    modal's own edge instead of the text wrapping in place. */}
-                <div style={{ fontSize: font.size.xs, color: color.textMuted, wordBreak: 'break-word' }}>
-                  Rule: {task.recurrence_rule || 'N/A'}
-                </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
                 {task.defaultTagRow && (
-                  <div style={{ fontSize: font.size.xs, color: color.textMuted, marginTop: space[1] }}>
-                    Default tag: {task.defaultTagRow.name}
-                  </div>
+                  <span
+                    title={task.defaultTagRow.name}
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: radius.full,
+                      background: task.defaultTagRow.color || color.accent,
+                      flexShrink: 0,
+                    }}
+                  />
                 )}
+                <div style={{ fontSize: font.size.md, fontWeight: font.weight.semibold, color: color.text }}>
+                  {task.title || '(untitled)'}
+                </div>
+                <span style={{ fontSize: font.size.xs, color: color.textMuted }}>
+                  {task.active ? '· Active' : '· Inactive'}
+                </span>
               </div>
+              {task.description && <div style={line}>{task.description}</div>}
+              <div style={line}>Rule: {task.recurrence_rule || 'N/A'}</div>
+              {task.defaultTagRow && <div style={line}>Default tag: {task.defaultTagRow.name}</div>}
               <button
                 type="button"
                 onClick={() => onEditTask(task.id)}
-                style={{ ...buttonGhost, padding: `${space[1]} ${space[2]}`, fontSize: font.size.sm, flexShrink: 0 }}
+                style={{ ...buttonGhost, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm, marginTop: space[2] }}
               >
                 Edit
               </button>

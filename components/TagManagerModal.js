@@ -93,7 +93,18 @@ export default function TagManagerModal({ onClose }) {
 
   const row = { display: 'flex', alignItems: 'center', gap: space[2], padding: `${space[2]} 0` };
 
+  // RecurringTasksModal/RecurringTaskEditModal render their OWN <Modal> —
+  // each a position:fixed box centered via top/left:50% + translate(-50%).
+  // They used to be nested as children INSIDE this component's own <Modal>
+  // JSX below. That put them in the DOM under an ancestor that has its own
+  // `transform` set (Modal.js's centering technique) — and per the CSS
+  // spec, any ancestor with `transform` becomes the containing block for a
+  // `position: fixed` descendant, instead of the viewport. Rendered here as
+  // siblings in a fragment instead, outside this component's own <Modal>,
+  // so each nested modal is a plain top-level fixed overlay again, with no
+  // transformed ancestor to reinterpret its positioning against.
   return (
+    <>
     <Modal onClose={onClose}>
       <div style={{ ...heading, marginBottom: space[1] }}>Manage tags</div>
       <div style={{ ...textMuted, marginBottom: space[4] }}>
@@ -207,27 +218,28 @@ export default function TagManagerModal({ onClose }) {
           Close
         </button>
       </div>
-
-      {showRecurring && !editingTaskId && (
-        <RecurringTasksModal
-          onClose={() => setShowRecurring(false)}
-          onEditTask={(taskId) => {
-            setEditingTaskId(taskId);
-          }}
-        />
-      )}
-
-      {editingTaskId && (
-        <RecurringTaskEditModal
-          taskId={editingTaskId}
-          onClose={() => setEditingTaskId(null)}
-          onSaved={() => {
-            setEditingTaskId(null);
-            setShowRecurring(false);
-            load();
-          }}
-        />
-      )}
     </Modal>
+
+    {showRecurring && !editingTaskId && (
+      <RecurringTasksModal
+        onClose={() => setShowRecurring(false)}
+        onEditTask={(taskId) => {
+          setEditingTaskId(taskId);
+        }}
+      />
+    )}
+
+    {editingTaskId && (
+      <RecurringTaskEditModal
+        taskId={editingTaskId}
+        onClose={() => setEditingTaskId(null)}
+        onSaved={() => {
+          setEditingTaskId(null);
+          setShowRecurring(false);
+          load();
+        }}
+      />
+    )}
+    </>
   );
 }
