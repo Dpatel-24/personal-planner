@@ -300,9 +300,10 @@ export default function CalendarView() {
                         display: 'flex',
                         alignItems: 'center',
                         gap: space[2],
+                        margin: `${space[1]} ${space[2]}`,
                         padding: `${space[1]} ${space[3]}`,
-                        background: 'rgba(217, 119, 6, 0.12)', // color.warning at 12% — same tint WeekSprintBar.js uses
-                        borderBottom: isLastRow ? border.none : border.default,
+                        background: 'rgba(217, 119, 6, 0.12)', // color.warning at 12% — same tint WeekSprintBar.js/CalendarChip's own tag tint use
+                        borderRadius: radius.sm, // same radius CalendarChip uses — reads as a chip stretched across the week, not a fixed divider row
                       }}
                     >
                       <span

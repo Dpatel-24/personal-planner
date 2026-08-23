@@ -94,9 +94,11 @@ Calendar's read-only history view below.
 
 **Calendar's sprint history.** `CalendarView.js` shows the same weeks' sprints
 too, read-only, as a full-grid-width row (`gridColumn: '1 / -1'`) inserted
-right after each week-row's 7th (Saturday) day cell — spans the whole width
-like a divider between weeks, not confined to one day's cell the way a task
-chip is. Only rendered when that week actually has a focus set (`lib/sprint-
+right after each week-row's 7th (Saturday) day cell — spans all 7 columns
+but styled like `CalendarChip.js` itself (`radius.sm` corners, inset margin
+on all sides), not a flush edge-to-edge divider — reads as one task chip
+stretched across the whole week, not a fixed banner row. Only rendered when
+that week actually has a focus set (`lib/sprint-
 queries.js`'s `getWeekSprintsInRange`, one query for the whole visible
 month) — a week with nothing set shows no bar at all, not an empty one.
 Calendar's grid weeks are Sunday-anchored (`buildGrid`'s `firstWeekday`, JS
