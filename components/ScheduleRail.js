@@ -144,6 +144,15 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
   // computed proposedStart, the value onGripPointerUp commits with.
   const moveDragRef = useRef(null); // { startY, startScheduledStart, moved, currentProposedStart } while dragging, else null
 
+  // Set right before onGripPointerUp commits an actual move (moved === true)
+  // that started on the MIDDLE zone (tag/title/tracked-time), not the grip.
+  // That zone is also the tap target for opening EditModal (via the outer
+  // div's own onClick, unchanged) — a plain tap must still open it exactly
+  // as before, but the click event that trails a real drag's pointerup must
+  // NOT also open EditModal right after the drop. The middle zone's own
+  // onClick below checks this flag and swallows exactly that one click.
+  const justDraggedRef = useRef(false);
+
   const onGripPointerDown = (e) => {
     e.stopPropagation(); // don't also trigger the block's own onClick (opens EditModal) — same as the resize handle
     e.preventDefault();
@@ -173,6 +182,11 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
     const { moved, currentProposedStart } = moveDragRef.current;
     moveDragRef.current = null;
     if (moved && currentProposedStart) {
+      // Only the middle zone's trailing click needs suppressing (the grip's
+      // own onClick already unconditionally stops propagation below,
+      // whether this gesture moved or not) — harmless to always set this,
+      // since the middle zone's onClick is the only place that reads it.
+      justDraggedRef.current = true;
       // onMoveCommit owns clearing the preview itself, AFTER it has applied
       // the result to local task state — calling onMoveEnd() here first
       // would clear the preview one tick before the optimistic update lands,
@@ -207,11 +221,13 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
       }}
       onClick={() => onEdit(instance)}
     >
-      {/* Drag-move grip — distinct hit area from the resize handle (bottom
-          6px strip) and from everything else in the flex row, per Step 3.
-          Its own stopPropagation()/touchAction:'none' means neither the
-          card's click-to-edit nor the browser's native touch-scroll ever
-          fights this gesture. */}
+      {/* Drag-move grip — a small dedicated affordance, kept even though the
+          middle zone right below is now ALSO grabbable (widening the actual
+          hit area was the point; the icon still signals "grab here" at a
+          glance). Distinct from the resize handle (bottom 6px strip). Its
+          own stopPropagation()/touchAction:'none' means neither the card's
+          click-to-edit nor the browser's native touch-scroll ever fights
+          this gesture. */}
       <div
         onPointerDown={onGripPointerDown}
         onPointerMove={onGripPointerMove}
@@ -244,41 +260,71 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
         style={{ flexShrink: 0 }}
         aria-label={done ? 'Mark not done' : 'Mark done'}
       />
-      {instance.tag && (
-        <span
-          title={instance.tag.name}
-          style={{
-            width: 8,
-            height: 8,
-            flexShrink: 0,
-            borderRadius: radius.full,
-            background: instance.tag.color || color.accent,
-          }}
-        />
-      )}
-      <span
+      {/* Grabbable middle zone (tag dot + title + tracked-time) — extends
+          the drag-to-move hit area from the checkbox out to the duration
+          stepper below, not just the small grip icon, per user request. A
+          plain tap still opens EditModal exactly as before (this zone
+          doesn't stopPropagation on pointerdown, so the outer div's own
+          onClick still fires normally for a non-drag tap) — only the click
+          that trails an ACTUAL drag gets swallowed here, via
+          justDraggedRef, so a drop doesn't also pop the edit modal open. */}
+      <div
+        onPointerDown={onGripPointerDown}
+        onPointerMove={onGripPointerMove}
+        onPointerUp={onGripPointerUp}
+        onClick={(e) => {
+          if (justDraggedRef.current) {
+            justDraggedRef.current = false;
+            e.stopPropagation();
+          }
+        }}
         style={{
           flex: 1,
           minWidth: 0,
-          fontSize: font.size.xs,
-          color: done ? color.textMuted : color.text,
-          textDecoration: done ? 'line-through' : 'none',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
+          display: 'flex',
+          alignItems: 'center',
+          gap: space[1],
+          height: '100%',
+          cursor: 'grab',
+          touchAction: 'none',
         }}
-        title={instance.title}
       >
-        {instance.title || '(untitled)'}
-      </span>
-      {/* Read-only tracked time — timer start/stop is deliberately
-          sidebar-only, matching WeekBoardCard/CalendarChip's existing
-          convention. */}
-      {instance.tracked_seconds > 0 && (
-        <span style={{ fontSize: font.size.xs, color: color.textMuted, flexShrink: 0 }}>
-          {formatDuration(instance.tracked_seconds)}
+        {instance.tag && (
+          <span
+            title={instance.tag.name}
+            style={{
+              width: 8,
+              height: 8,
+              flexShrink: 0,
+              borderRadius: radius.full,
+              background: instance.tag.color || color.accent,
+            }}
+          />
+        )}
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: font.size.xs,
+            color: done ? color.textMuted : color.text,
+            textDecoration: done ? 'line-through' : 'none',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+          title={instance.title}
+        >
+          {instance.title || '(untitled)'}
         </span>
-      )}
+        {/* Read-only tracked time — timer start/stop is deliberately
+            sidebar-only, matching WeekBoardCard/CalendarChip's existing
+            convention. */}
+        {instance.tracked_seconds > 0 && (
+          <span style={{ fontSize: font.size.xs, color: color.textMuted, flexShrink: 0 }}>
+            {formatDuration(instance.tracked_seconds)}
+          </span>
+        )}
+      </div>
       {/* Duration stepper — immediate write, no Save-button gate, calls the
           SAME onDurationChange the resize handle below calls. This is the
           restored replacement for the deleted sidebar's stepper; it does
