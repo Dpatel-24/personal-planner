@@ -25,15 +25,24 @@ import CalendarDayCell from './CalendarDayCell';
 import EditModal from './EditModal';
 import TagFilterDropdown from './TagFilterDropdown';
 
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+// Monday-first, matching Board's own Mon-Sun week (lib/board-queries.js's
+// getWeekDates()) — the two views used to disagree (this grid was
+// Sunday-first), which miscategorized which week a Board-set sprint focus
+// belonged to whenever it landed on this grid's row. Both views now agree
+// on what "a week" is.
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const pad = (n) => String(n).padStart(2, '0');
 
 // All day-strings for the month grid (full leading/trailing weeks).
 function buildGrid(year, month) {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstWeekday = new Date(year, month, 1).getDay();
-  const totalCells = Math.ceil((firstWeekday + daysInMonth) / 7) * 7;
-  const gridStart = addDays(`${year}-${pad(month + 1)}-01`, -firstWeekday);
+  const firstWeekday = new Date(year, month, 1).getDay(); // Sun=0..Sat=6 (native JS)
+  // Days since the PRECEDING Monday — same conversion lib/board-queries.js's
+  // getWeekDates() uses ((ref.getDay() + 6) % 7), so both views place the
+  // 1st of the month, and every day after it, in identically-anchored weeks.
+  const daysSinceMonday = (firstWeekday + 6) % 7;
+  const totalCells = Math.ceil((daysSinceMonday + daysInMonth) / 7) * 7;
+  const gridStart = addDays(`${year}-${pad(month + 1)}-01`, -daysSinceMonday);
   return Array.from({ length: totalCells }, (_, i) => addDays(gridStart, i));
 }
 
@@ -263,18 +272,19 @@ export default function CalendarView() {
               const isLastCol = i % 7 === 6;
               const dayItems = itemsByDate[day] || [];
               // Sprint history bar: rendered once per week-ROW, right after
-              // that row's 7th (Saturday) cell, so it sits directly beneath
-              // that week's day cells and spans the full grid width (7
-              // columns) rather than living inside any one day's cell like
-              // a task chip does — per direct request, "same style [as the
-              // Board bar], but stretches across the entire week." `day` at
-              // this point IS that row's Saturday (i % 7 === 6); the row's
-              // own Monday — week_sprints' key — is two days earlier.
-              // gridColumn:'1 / -1' is what makes a grid item span every
-              // column instead of occupying just one auto-placed cell; CSS
-              // grid auto-flow naturally starts it on a fresh row since the
-              // preceding 7 day-cells already fill the current one exactly.
-              const weekMonday = isLastCol ? addDays(day, -5) : null;
+              // that row's 7th (now Sunday, grid is Monday-first) cell, so
+              // it sits directly beneath that week's day cells and spans
+              // the full grid width (7 columns) rather than living inside
+              // any one day's cell like a task chip does — per direct
+              // request, "same style [as the Board bar], but stretches
+              // across the entire week." `day` at this point IS that row's
+              // Sunday (i % 7 === 6); the row's own Monday — week_sprints'
+              // key — is six days earlier. gridColumn:'1 / -1' is what
+              // makes a grid item span every column instead of occupying
+              // just one auto-placed cell; CSS grid auto-flow naturally
+              // starts it on a fresh row since the preceding 7 day-cells
+              // already fill the current one exactly.
+              const weekMonday = isLastCol ? addDays(day, -6) : null;
               const weekFocus = weekMonday ? sprintsByWeek[weekMonday] : null;
               return (
                 <Fragment key={day}>

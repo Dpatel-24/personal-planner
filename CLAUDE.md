@@ -94,17 +94,21 @@ Calendar's read-only history view below.
 
 **Calendar's sprint history.** `CalendarView.js` shows the same weeks' sprints
 too, read-only, as a full-grid-width row (`gridColumn: '1 / -1'`) inserted
-right after each week-row's 7th (Saturday) day cell — spans all 7 columns
-but styled like `CalendarChip.js` itself (`radius.sm` corners, inset margin
-on all sides), not a flush edge-to-edge divider — reads as one task chip
+right after each week-row's 7th (Sunday) day cell — spans all 7 columns but
+styled like `CalendarChip.js` itself (`radius.sm` corners, inset margin on
+all sides), not a flush edge-to-edge divider — reads as one task chip
 stretched across the whole week, not a fixed banner row. Only rendered when
-that week actually has a focus set (`lib/sprint-
-queries.js`'s `getWeekSprintsInRange`, one query for the whole visible
-month) — a week with nothing set shows no bar at all, not an empty one.
-Calendar's grid weeks are Sunday-anchored (`buildGrid`'s `firstWeekday`, JS
-`getDay()` Sun=0) while `week_sprints.week_start` is always a Monday (Board's
-own Mon-Sun convention) — the row's Monday is worked out as that row's
-Saturday cell minus 5 days, not assumed to be the row's first cell.
+that week actually has a focus set (`lib/sprint-queries.js`'s
+`getWeekSprintsInRange`, one query for the whole visible month) — a week
+with nothing set shows no bar at all, not an empty one.
+
+**Calendar's grid is Monday-first**, matching Board's own Mon-Sun week
+(`lib/board-queries.js`'s `getWeekDates()`) — both `buildGrid`'s own
+leading-padding math and the `WEEKDAYS` header array were changed together
+(2026-08, see decisions log) after Sunday-first rows miscategorized which
+week a Board-set sprint belonged to whenever it landed on Calendar's row.
+A week-row's Monday is that row's 7th (Sunday) cell minus 6 days, not
+assumed to be the row's own first cell.
 
 ## Anti-goals (current)
 - No multi-user support, sharing, or team features
@@ -391,6 +395,11 @@ sidebar/rail) is currently open, not just on the card that started it.
   actually stored on the instance row) — reported as a bug after deleting a
   real recurring task and finding its old occurrences still on the board,
   blank.
+- (2026-08) Calendar's month grid switched from Sunday-first to Monday-first
+  weeks, matching Board. Reason: the two views disagreeing on what "a week"
+  is meant a sprint focus set on the Board (Mon-Sun) could land on the WRONG
+  row once shown on Calendar's grid (previously Sun-Sat) — e.g. a Sunday
+  fell in the following row on Calendar but the same week on Board.
 
 ## Current state (v5 complete)
 Board, calendar, sidebar, and the Schedule Rail — all four views, full
