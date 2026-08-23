@@ -400,6 +400,16 @@ export default function ScheduleRail({ standalone = false }) {
   // in onMoveCommit below, via a separate cascadeLater() call at drop time,
   // not from this state.
   const [dragPreview, setDragPreview] = useState(null);
+  // Current-time indicator. Ticks on a plain interval rather than once at
+  // mount — the rail is a long-lived panel (no unmount/remount as the hour
+  // changes), so without this the line would freeze at whatever time the
+  // page happened to load. A 60s tick is plenty for a line whose own
+  // granularity is 1px/minute; no need for anything finer.
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60000);
+    return () => clearInterval(id);
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -557,6 +567,17 @@ export default function ScheduleRail({ standalone = false }) {
   // past 9 PM) — the rail's height grows to fit rather than clipping tasks.
   const railHeight = Math.max(gridHeight, latestEndMinutes * PIXELS_PER_MINUTE);
 
+  // Current-time line position. `today` never changes once set (the rail
+  // has no date navigation — it's always "today"), so `now` only needs
+  // checking against the SAME calendar day `railStart` was built for; no
+  // separate "is now actually today" guard is needed beyond that. Hidden
+  // outside the rendered grid (before 6 AM or past the bottom of railHeight,
+  // e.g. very early morning) rather than clamped to an edge — a line
+  // sitting at the top or bottom implying "now" when it isn't there yet/
+  // anymore would be misleading.
+  const nowMinutes = minutesFromRailStart(now, railStart);
+  const showNowLine = nowMinutes >= 0 && nowMinutes <= railHeight / PIXELS_PER_MINUTE;
+
   const headerBlock = standalone && (
     <>
       <div style={{ padding: space[4], borderBottom: border.default }}>
@@ -662,6 +683,37 @@ export default function ScheduleRail({ standalone = false }) {
                 />
               );
             })}
+
+            {/* Current-time line — painted AFTER the task blocks (later in
+                DOM order), so it stays visible crossing over a block rather
+                than being covered by one. pointerEvents:'none' so it's
+                purely visual, never intercepts a click/drag meant for
+                whatever block it happens to be sitting on. */}
+            {showNowLine && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: nowMinutes * PIXELS_PER_MINUTE,
+                  left: 0,
+                  right: 0,
+                  height: 2,
+                  background: color.accent,
+                  pointerEvents: 'none',
+                }}
+              >
+                <span
+                  style={{
+                    position: 'absolute',
+                    left: -4,
+                    top: -3,
+                    width: 8,
+                    height: 8,
+                    borderRadius: radius.full,
+                    background: color.accent,
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
