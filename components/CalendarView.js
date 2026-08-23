@@ -264,78 +264,125 @@ export default function CalendarView() {
               </div>
             ))}
 
-            {days.map((day, i) => {
-              const inMonth = Number(day.split('-')[1]) === month + 1;
-              const isToday = day === today;
-              const dayNum = Number(day.split('-')[2]);
-              const isLastRow = i >= days.length - 7;
-              const isLastCol = i % 7 === 6;
-              const dayItems = itemsByDate[day] || [];
-              // Sprint history bar: rendered once per week-ROW, right after
-              // that row's 7th (now Sunday, grid is Monday-first) cell, so
-              // it sits directly beneath that week's day cells and spans
-              // the full grid width (7 columns) rather than living inside
-              // any one day's cell like a task chip does — per direct
-              // request, "same style [as the Board bar], but stretches
-              // across the entire week." `day` at this point IS that row's
-              // Sunday (i % 7 === 6); the row's own Monday — week_sprints'
-              // key — is six days earlier. gridColumn:'1 / -1' is what
-              // makes a grid item span every column instead of occupying
-              // just one auto-placed cell; CSS grid auto-flow naturally
-              // starts it on a fresh row since the preceding 7 day-cells
-              // already fill the current one exactly.
-              const weekMonday = isLastCol ? addDays(day, -6) : null;
-              const weekFocus = weekMonday ? sprintsByWeek[weekMonday] : null;
-              return (
-                <Fragment key={day}>
-                  <CalendarDayCell
-                    dateStr={day}
-                    dayNum={dayNum}
-                    inMonth={inMonth}
-                    isToday={isToday}
-                    items={
-                      selectedTags.size > 0
-                        ? dayItems.filter((i) => i.tag_id && selectedTags.has(i.tag_id))
-                        : dayItems
-                    }
-                    isLastRow={isLastRow}
-                    isLastCol={isLastCol}
-                    onToggleStatus={onToggleStatus}
-                    onEdit={handleEdit}
-                  />
-                  {weekFocus && (
-                    <div
-                      style={{
-                        gridColumn: '1 / -1',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: space[2],
-                        margin: `${space[1]} ${space[2]}`,
-                        padding: `${space[1]} ${space[3]}`,
-                        background: 'rgba(217, 119, 6, 0.12)', // color.warning at 12% — same tint WeekSprintBar.js/CalendarChip's own tag tint use
-                        borderRadius: radius.sm, // same radius CalendarChip uses — reads as a chip stretched across the week, not a fixed divider row
-                      }}
-                    >
-                      <span
+            {/* Each week-row is now THREE stacked pieces, in this order:
+                (1) 7 date-number badges, (2) one optional full-width sprint
+                chip, (3) 7 task cells (CalendarDayCell). Splitting date and
+                tasks apart (previously welded into one CalendarDayCell) is
+                what makes room to slot the sprint chip between them —
+                "underneath the date, above the tasks," not trailing after
+                the week like a banner. Chunking `days` (a flat array) into
+                week-sized slices here, rather than computing everything
+                inline in one pass, is what makes it possible to render each
+                week's 3 pieces as 3 separate loops without re-deriving which
+                week a given day belongs to each time. */}
+            {Array.from({ length: days.length / 7 }, (_, weekIdx) => days.slice(weekIdx * 7, weekIdx * 7 + 7)).map(
+              (week, weekIdx) => {
+                const isLastRow = weekIdx === days.length / 7 - 1;
+                // Grid is Monday-first (see buildGrid above) — week[0] IS
+                // that row's own Monday already, no offset math needed.
+                const weekMonday = week[0];
+                const weekFocus = sprintsByWeek[weekMonday];
+
+                return (
+                  <Fragment key={weekMonday}>
+                    {week.map((day, col) => {
+                      const inMonth = Number(day.split('-')[1]) === month + 1;
+                      const isToday = day === today;
+                      const dayNum = Number(day.split('-')[2]);
+                      const isLastCol = col === 6;
+                      return (
+                        <div
+                          key={`hdr-${day}`}
+                          style={{
+                            padding: `${space[1]} ${space[1]} 0`,
+                            background: inMonth ? color.bg : color.bgSubtle,
+                            borderRight: isLastCol ? border.none : border.default,
+                            // Deliberately NO borderBottom here — this row
+                            // reads as connected to the sprint chip/tasks
+                            // below it, not a separate divider row. The
+                            // week's own bottom edge is drawn by the task
+                            // cells further down (see CalendarDayCell).
+                            boxSizing: 'border-box',
+                          }}
+                        >
+                          <span
+                            style={{
+                              display: 'inline-block',
+                              minWidth: 20,
+                              textAlign: 'center',
+                              fontSize: font.size.xs,
+                              fontWeight: isToday ? font.weight.semibold : font.weight.normal,
+                              color: isToday ? color.white : inMonth ? color.text : color.textSubtle,
+                              background: isToday ? color.accent : 'transparent',
+                              borderRadius: radius.full,
+                              padding: `0 ${space[1]}`,
+                            }}
+                          >
+                            {dayNum}
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                    {weekFocus && (
+                      <div
                         style={{
-                          fontSize: font.size.xs,
-                          fontWeight: font.weight.semibold,
-                          color: color.warning,
-                          flexShrink: 0,
-                          textTransform: 'uppercase',
-                          letterSpacing: 0.5,
+                          gridColumn: '1 / -1',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: space[1],
+                          margin: `2px ${space[1]}`,
+                          // Same padding/font scale as CalendarChip itself
+                          // (1px vertical, fontSize.xs) — "same size as a
+                          // task card... thin," not a padded banner.
+                          padding: `1px ${space[1]}`,
+                          background: 'rgba(217, 119, 6, 0.12)', // color.warning at 12% — same tint CalendarChip's own tag tint uses
+                          borderRadius: radius.sm, // same radius CalendarChip uses — reads as a chip stretched across the week
                         }}
                       >
-                        Sprint:
-                      </span>
-                      <span style={{ fontSize: font.size.sm, color: color.text, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {weekFocus}
-                      </span>
-                    </div>
-                  )}
-                </Fragment>
-              );
-            })}
+                        <span style={{ fontSize: font.size.xs, fontWeight: font.weight.semibold, color: color.warning, flexShrink: 0 }}>
+                          Sprint:
+                        </span>
+                        <span
+                          style={{
+                            fontSize: font.size.xs,
+                            color: color.text,
+                            minWidth: 0,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {weekFocus}
+                        </span>
+                      </div>
+                    )}
+
+                    {week.map((day, col) => {
+                      const inMonth = Number(day.split('-')[1]) === month + 1;
+                      const isLastCol = col === 6;
+                      const dayItems = itemsByDate[day] || [];
+                      return (
+                        <CalendarDayCell
+                          key={day}
+                          dateStr={day}
+                          inMonth={inMonth}
+                          items={
+                            selectedTags.size > 0
+                              ? dayItems.filter((i) => i.tag_id && selectedTags.has(i.tag_id))
+                              : dayItems
+                          }
+                          isLastRow={isLastRow}
+                          isLastCol={isLastCol}
+                          onToggleStatus={onToggleStatus}
+                          onEdit={handleEdit}
+                        />
+                      );
+                    })}
+                  </Fragment>
+                );
+              }
+            )}
           </div>
         </div>
 
