@@ -79,7 +79,7 @@ export default function RecurringTaskEditModal({ taskId, onClose, onSaved }) {
   };
 
   const remove = async () => {
-    if (!confirm(`Delete "${template.title}"? Its already-generated occurrences stay, as plain one-off tasks.`)) return;
+    if (!confirm(`Delete "${template.title}"? This also deletes every occurrence it has generated — cannot be undone.`)) return;
     setBusy(true);
     setError(null);
     try {
