@@ -10,10 +10,10 @@
 // read as a bug from the outside (see CLAUDE.md decisions log).
 import { useEffect, useState } from 'react';
 import Modal from './Modal';
-import { getTaskTemplate, updateTaskTemplate } from '@/lib/tag-queries';
+import { getTaskTemplate, updateTaskTemplate, deleteTaskTemplate } from '@/lib/tag-queries';
 import { FREQUENCIES, buildRRule, describeRRule, weekdayCode, monthDay } from '@/lib/rrulePresets';
 import { color, space, font } from '@/lib/tokens';
-import { input as inputStyle, label as labelStyle, buttonPrimary, buttonSecondary, heading, textMuted } from '@/lib/components';
+import { input as inputStyle, label as labelStyle, buttonPrimary, buttonSecondary, buttonDanger, heading, textMuted } from '@/lib/components';
 
 const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const WEEKDAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
@@ -76,6 +76,20 @@ export default function RecurringTaskEditModal({ taskId, onClose, onSaved }) {
       startDate: template?.start_date,
       weekdays: daysForRule,
     });
+  };
+
+  const remove = async () => {
+    if (!confirm(`Delete "${template.title}"? Its already-generated occurrences stay, as plain one-off tasks.`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteTaskTemplate(taskId);
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(e.message);
+      setBusy(false);
+    }
   };
 
   const save = async (e) => {
@@ -174,13 +188,18 @@ export default function RecurringTaskEditModal({ taskId, onClose, onSaved }) {
 
         {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: space[2] }}>
-          <button type="button" style={buttonSecondary} onClick={onClose} disabled={busy}>
-            Cancel
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: space[2] }}>
+          <button type="button" style={buttonDanger} onClick={remove} disabled={busy}>
+            Delete
           </button>
-          <button type="submit" style={buttonPrimary} disabled={busy}>
-            {busy ? 'Saving…' : 'Save'}
-          </button>
+          <div style={{ display: 'flex', gap: space[2] }}>
+            <button type="button" style={buttonSecondary} onClick={onClose} disabled={busy}>
+              Cancel
+            </button>
+            <button type="submit" style={buttonPrimary} disabled={busy}>
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+          </div>
         </div>
       </form>
     </Modal>

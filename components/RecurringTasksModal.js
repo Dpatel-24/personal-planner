@@ -71,13 +71,15 @@ export default function RecurringTasksModal({ onClose, onEditTask }) {
               {task.description && <div style={line}>{task.description}</div>}
               <div style={line}>Rule: {task.recurrence_rule || 'N/A'}</div>
               {task.defaultTagRow && <div style={line}>Default tag: {task.defaultTagRow.name}</div>}
-              <button
-                type="button"
-                onClick={() => onEditTask(task.id)}
-                style={{ ...buttonGhost, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm, marginTop: space[2] }}
-              >
-                Edit
-              </button>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: space[2] }}>
+                <button
+                  type="button"
+                  onClick={() => onEditTask(task.id)}
+                  style={{ ...buttonGhost, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm }}
+                >
+                  Edit
+                </button>
+              </div>
             </div>
           ))}
         </div>
