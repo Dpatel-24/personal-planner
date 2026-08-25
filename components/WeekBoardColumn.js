@@ -51,13 +51,16 @@ export default function WeekBoardColumn({
     padding: `${space[2]} ${space[3]}`,
     borderBottom: border.default,
     borderRadius: `${radius.lg} ${radius.lg} 0 0`,
-    background: isToday ? color.accentSubtle : 'transparent',
+    // V6: today's header tint was still the old purple accent, never
+    // remapped during the design pass — navy/navySoft to match everywhere
+    // else "today"/active now reads navy.
+    background: isToday ? color.navySoft : 'transparent',
   };
 
   const titleStyle = {
     fontSize: font.size.sm,
     fontWeight: isToday || isInbox ? font.weight.semibold : font.weight.medium,
-    color: isToday ? color.accent : color.text,
+    color: isToday ? color.navy : color.text,
   };
 
   const itemIds = items.map((i) => i.id);

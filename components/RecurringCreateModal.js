@@ -74,9 +74,9 @@ export default function RecurringCreateModal({ onClose, onCreated }) {
   const dayBtn = (active) => ({
     padding: `${space[1]} ${space[2]}`,
     borderRadius: radius.sm,
-    border: active ? border.accent : border.default,
-    background: active ? color.accentSubtle : color.white,
-    color: active ? color.accent : color.textMuted,
+    border: active ? `1px solid ${color.navy}` : border.default,
+    background: active ? color.navySoft : color.white,
+    color: active ? color.navy : color.textMuted,
     fontSize: font.size.xs,
     fontFamily: font.family,
     cursor: 'pointer',

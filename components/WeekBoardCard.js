@@ -152,7 +152,7 @@ export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onE
             <div
               style={{
                 fontSize: font.size.xs,
-                color: isTiming ? color.accent : color.textMuted,
+                color: isTiming ? color.navy : color.textMuted,
                 marginTop: space[1],
                 fontVariantNumeric: 'tabular-nums',
               }}

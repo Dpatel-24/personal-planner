@@ -312,8 +312,8 @@ export default function CalendarView() {
                               textAlign: 'center',
                               fontSize: font.size.xs,
                               fontWeight: isToday ? font.weight.semibold : font.weight.normal,
-                              color: isToday ? color.white : inMonth ? color.text : color.textSubtle,
-                              background: isToday ? color.accent : 'transparent',
+                              color: isToday ? color.navyOn : inMonth ? color.text : color.textSubtle,
+                              background: isToday ? color.navy : 'transparent',
                               borderRadius: radius.full,
                               padding: `0 ${space[1]}`,
                             }}

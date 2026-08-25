@@ -126,7 +126,7 @@ export default function CalendarChip({ instance, columnKey, onToggleStatus, onEd
         <span
           style={{
             fontSize: font.size.xs,
-            color: isTiming ? color.accent : color.textMuted,
+            color: isTiming ? color.navy : color.textMuted,
             flexShrink: 0,
             fontVariantNumeric: 'tabular-nums',
           }}

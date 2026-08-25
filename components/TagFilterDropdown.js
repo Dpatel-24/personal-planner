@@ -93,7 +93,7 @@ export default function TagFilterDropdown({ tags, selected, onChange }) {
                 textAlign: 'left',
                 background: 'transparent',
                 border: 'none',
-                color: color.accent,
+                color: color.navy,
                 fontSize: font.size.xs,
                 fontFamily: font.family,
                 cursor: 'pointer',

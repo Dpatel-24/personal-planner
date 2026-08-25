@@ -706,7 +706,7 @@ export default function ScheduleRail({ standalone = false }) {
                   left: 0,
                   right: 0,
                   height: 2,
-                  background: color.accent,
+                  background: color.navy,
                   pointerEvents: 'none',
                 }}
               >
@@ -718,7 +718,7 @@ export default function ScheduleRail({ standalone = false }) {
                     width: 8,
                     height: 8,
                     borderRadius: radius.full,
-                    background: color.accent,
+                    background: color.navy,
                   }}
                 />
               </div>

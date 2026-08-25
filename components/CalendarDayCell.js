@@ -73,7 +73,7 @@ export default function CalendarDayCell({
           }}
           style={{
             fontSize: font.size.xs,
-            color: color.accent,
+            color: color.navy,
             background: 'none',
             border: 'none',
             cursor: 'pointer',
