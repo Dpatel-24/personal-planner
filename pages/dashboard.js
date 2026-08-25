@@ -37,81 +37,99 @@ const sectionLabelStyle = {
   marginBottom: space[2],
 };
 
-// Plain SVG line chart — no charting library in this app. Now plots TWO
-// series together (the dashboard's "momentum" centerpiece, per the ask to
-// focus on the trend over the bar graphs): the 4-week moving average (solid
-// ink line) and the 13-week/~3-month moving average (dashed muted line).
-// `series4`'s own week_labels are the master x-axis — series13 is always a
-// subset of it in the normal contiguous-weekly-entry case (it needs a
-// longer run of entries before its first point exists), so its points are
-// placed by looking up each label's x position in series4 rather than
-// assuming the two arrays line up index-for-index.
-function MovingAverageChart({ series4, series13 }) {
-  const width = 900;
+// Plain SVG line chart — no charting library in this app. Fixed FULL axis
+// (`labels` — e.g. all 52 ISO weeks of a year, or all 12 months), not just
+// the slots with real data. This is the fix for the exact bug flagged
+// against the user's own spreadsheet reference: Excel plotted a missing
+// week/month as a 0 and drew a misleading bell curve down to the baseline
+// and back up. Here, `seriesA`/`seriesB` are {label: value} maps built only
+// from REAL entries — a label with no entry is genuinely absent from that
+// series, never substituted with 0 — so a gap just breaks the line into
+// separate segments (buildPath starts a fresh 'M'), leaving blank space
+// instead of a fake dip to zero.
+function TrendChart({ labels, seriesA, seriesB, labelA, labelB }) {
+  const width = 1400;
   const height = 260;
   const padTop = 24;
   const padBottom = 32;
-  const padX = 32;
-
-  const n = series4.length;
+  const padX = 24;
+  const n = labels.length;
   const xAt = (i) => (n === 1 ? width / 2 : padX + (i / (n - 1)) * (width - padX * 2));
-  const xIndexByLabel = new Map(series4.map((p, i) => [p.week_label, i]));
 
-  const allValues = [...series4.map((p) => p.avg), ...series13.map((p) => p.avg)];
-  const minV = Math.min(...allValues);
-  const maxV = Math.max(...allValues);
-  const range = maxV - minV || 1; // flat series (all equal) — avoid a /0
+  const allValues = [...Object.values(seriesA), ...Object.values(seriesB)];
+  const hasData = allValues.length > 0;
+  // Baseline always includes 0 (matches the reference's own y-axis, which
+  // starts at 0.00 on both charts) — headroom above the real max so the
+  // line doesn't touch the top edge.
+  const maxV = hasData ? Math.max(...allValues, 0.1) * 1.15 : 1;
   const plotH = height - padTop - padBottom;
-  const yFor = (v) => padTop + plotH - ((v - minV) / range) * plotH;
+  const yFor = (v) => padTop + plotH - (v / maxV) * plotH;
 
-  const points4 = series4.map((p, i) => ({ ...p, x: xAt(i), y: yFor(p.avg) }));
-  const path4 = points4.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ');
+  const buildPath = (series) => {
+    let d = '';
+    let open = false;
+    labels.forEach((label, i) => {
+      const v = series[label];
+      if (v === undefined) {
+        open = false;
+        return;
+      }
+      const x = xAt(i).toFixed(1);
+      const y = yFor(v).toFixed(1);
+      d += open ? ` L ${x} ${y}` : `${d ? ' ' : ''}M ${x} ${y}`;
+      open = true;
+    });
+    return d;
+  };
 
-  const points13 = series13
-    .filter((p) => xIndexByLabel.has(p.week_label))
-    .map((p) => ({ ...p, x: xAt(xIndexByLabel.get(p.week_label)), y: yFor(p.avg) }));
-  const path13 = points13.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ');
-
-  // Up to 52 weeks of x-axis labels would collide — show at most ~12,
+  const pathA = buildPath(seriesA);
+  const pathB = buildPath(seriesB);
+  // A fixed 52 (or 12) labels would collide if all shown — reduce to ~14,
   // evenly spaced, same idea as a normal chart-library tick reducer.
-  const labelEvery = Math.max(1, Math.ceil(n / 12));
-  const lastPoint4 = points4[points4.length - 1];
-  const lastPoint13 = points13[points13.length - 1];
+  const labelEvery = Math.max(1, Math.ceil(n / 14));
 
   return (
-    <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', fontFamily: font.family }}>
-      {path13 && <path d={path13} fill="none" stroke={color.muted} strokeWidth={2} strokeDasharray="5 4" />}
-      {path4 && <path d={path4} fill="none" stroke={color.ink} strokeWidth={2} />}
-      {points4.map((pt, i) =>
-        i % labelEvery === 0 ? (
-          <text key={pt.week_label} x={pt.x} y={height - 10} textAnchor="middle" fontSize={9} fill={color.mutedFaint}>
-            {pt.week_label}
-          </text>
-        ) : null
-      )}
-      {lastPoint4 && <circle cx={lastPoint4.x} cy={lastPoint4.y} r={4} fill={color.ink} />}
-      {lastPoint13 && <circle cx={lastPoint13.x} cy={lastPoint13.y} r={4} fill={color.muted} />}
-    </svg>
+    <>
+      <div style={{ display: 'flex', gap: space[4], fontSize: font.size.xs, color: color.muted, marginBottom: space[2] }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
+          <svg width="16" height="8" style={{ flexShrink: 0 }}>
+            <line x1="0" y1="4" x2="16" y2="4" stroke={color.ink} strokeWidth={2} />
+          </svg>
+          {labelA}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
+          <svg width="16" height="8" style={{ flexShrink: 0 }}>
+            <line x1="0" y1="4" x2="16" y2="4" stroke={color.muted} strokeWidth={2} strokeDasharray="5 4" />
+          </svg>
+          {labelB}
+        </div>
+      </div>
+      <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', fontFamily: font.family }}>
+        {pathB && <path d={pathB} fill="none" stroke={color.muted} strokeWidth={2} strokeDasharray="5 4" />}
+        {pathA && <path d={pathA} fill="none" stroke={color.ink} strokeWidth={2} />}
+        {labels.map((label, i) =>
+          i % labelEvery === 0 ? (
+            <text key={label} x={xAt(i)} y={height - 10} textAnchor="middle" fontSize={9} fill={color.mutedFaint}>
+              {label}
+            </text>
+          ) : null
+        )}
+      </svg>
+    </>
   );
 }
 
-// Small solid/dashed legend for the two lines above — kept as its own
-// component since MovingAverageChart is pure SVG (no room for HTML labels
-// inside it) and the legend needs normal text rendering.
-function MovingAverageLegend() {
-  const item = { display: 'flex', alignItems: 'center', gap: space[1] };
-  const swatch = (dashed) => (
-    <svg width="16" height="8" style={{ flexShrink: 0 }}>
-      <line x1="0" y1="4" x2="16" y2="4" stroke={dashed ? color.muted : color.ink} strokeWidth={2} strokeDasharray={dashed ? '5 4' : undefined} />
-    </svg>
-  );
-  return (
-    <div style={{ display: 'flex', gap: space[4], fontSize: font.size.xs, color: color.muted, marginBottom: space[2] }}>
-      <div style={item}>{swatch(false)} 4-week moving average</div>
-      <div style={item}>{swatch(true)} 13-week (~3 month) moving average</div>
-    </div>
-  );
+// 'YYYY-Www' for every week of `year`, W01..W52 — the fixed weekly axis
+// TrendChart plots against, so the chart always spans a full year like the
+// reference regardless of how many weeks actually have entries.
+function fullYearWeekLabels(year) {
+  return Array.from({ length: 52 }, (_, i) => `${year}-W${String(i + 1).padStart(2, '0')}`);
 }
+
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
 
 function StatCard({ label, value, color: valueColor }) {
   return (
@@ -143,6 +161,23 @@ export default function DashboardPage() {
   }, []);
 
   const maxTrendScore = stats ? Math.max(...stats.trend.map((e) => Number(e.score)), 0.0001) : 0;
+
+  // Fixed full-year axes for the two TrendChart usages below — derived from
+  // the most recent real entry's own year (weekly) / month (monthly), same
+  // "one year at a time" convention lib/dates.js's monthName() already
+  // documents this app as modeled on. {label: value} maps, built ONLY from
+  // real entries — a label absent from the map is genuinely unlogged, never
+  // filled with 0 (see TrendChart's own comment for why that distinction
+  // matters).
+  const weekYear = stats ? Number(stats.currentWeek.split('-W')[0]) : null;
+  const weekLabels = weekYear ? fullYearWeekLabels(weekYear) : [];
+  const weekSeries4 = stats ? Object.fromEntries(stats.movingAverageTrend.map((p) => [p.week_label, p.avg])) : {};
+  const weekSeries13 = stats ? Object.fromEntries(stats.movingAverageTrend13.map((p) => [p.week_label, p.avg])) : {};
+  const monthSeriesAvg = monthly ? Object.fromEntries(monthly.months.map((m) => [m.monthName, m.avgScore])) : {};
+  const monthSeries3Mo = monthly
+    ? Object.fromEntries(monthly.months.filter((m) => m.threeMonthAvg !== null).map((m) => [m.monthName, m.threeMonthAvg]))
+    : {};
+  const monthYear = monthly && monthly.months.length > 0 ? monthly.months[monthly.months.length - 1].monthKey.split('-')[0] : null;
 
   return (
     <>
@@ -189,12 +224,13 @@ export default function DashboardPage() {
               {/* Momentum — the dashboard's centerpiece per the ask to focus
                   on the trend over the bar graphs/raw numbers: moved up
                   here (right under At a Glance) and enlarged, rather than a
-                  small chart sitting below Weekly Trend/Monthly Log. */}
+                  small chart sitting below Weekly Trend/Monthly Log. Full
+                  52-week x-axis (weekYear), matching the spreadsheet
+                  reference's own span — weeks with no entry are simply
+                  absent from the line, never a fake 0. */}
               <div style={{ display: 'flex', alignItems: 'baseline', gap: space[2], marginBottom: space[2] }}>
                 <div style={sectionLabelStyle}>Momentum</div>
-                <span style={{ fontSize: font.size.xs, color: color.muted }}>
-                  (last {stats.movingAverageTrend.length} weeks — moving averages)
-                </span>
+                <span style={{ fontSize: font.size.xs, color: color.muted }}>({weekYear} — full year)</span>
               </div>
               <div style={{ background: color.card, border: `1px solid ${color.lifeFormulaBorder}`, borderRadius: radius.lg, padding: space[4], marginBottom: space[3] }}>
                 {stats.movingAverageTrend.length > 0 ? (
@@ -213,8 +249,13 @@ export default function DashboardPage() {
                         </div>
                       </div>
                     </div>
-                    <MovingAverageLegend />
-                    <MovingAverageChart series4={stats.movingAverageTrend} series13={stats.movingAverageTrend13} />
+                    <TrendChart
+                      labels={weekLabels}
+                      seriesA={weekSeries4}
+                      seriesB={weekSeries13}
+                      labelA="4-week moving average"
+                      labelB="13-week (~3 month) moving average"
+                    />
                   </>
                 ) : (
                   <div style={{ fontSize: font.size.sm, color: color.muted }}>
@@ -291,6 +332,22 @@ export default function DashboardPage() {
                       (rolled up from weekly entries — no separate monthly logging)
                     </span>
                   </div>
+
+                  {/* Chart added alongside the existing table (table stays,
+                      per the ask — this supplements it, per your reference's
+                      second chart). Same full-year, gap-aware TrendChart as
+                      Momentum above; months with no logged weeks are simply
+                      absent from the line, not a fake 0. */}
+                  <div style={{ background: color.card, border: `1px solid ${color.lifeFormulaBorder}`, borderRadius: radius.lg, padding: space[4], marginBottom: space[3] }}>
+                    <TrendChart
+                      labels={MONTH_NAMES}
+                      seriesA={monthSeriesAvg}
+                      seriesB={monthSeries3Mo}
+                      labelA={`Monthly L(t)${monthYear ? ` (${monthYear})` : ''}`}
+                      labelB="3-month moving average"
+                    />
+                  </div>
+
                   <div style={{ background: color.card, border: `1px solid ${color.lifeFormulaBorder}`, borderRadius: radius.lg, overflow: 'hidden', maxWidth: 640, marginBottom: space[4] }}>
                     <div
                       style={{
