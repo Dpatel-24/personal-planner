@@ -121,10 +121,10 @@ export default function DashboardPage() {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <link rel="icon" href="/favicon.ico" />
       </Head>
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: color.paper }}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: color.paperV6 }}>
         <AppNav current="dashboard" onManageTags={() => setManagingTags(true)} />
 
-        <section style={{ flex: 1, minHeight: 0, padding: space[6], overflowY: 'auto', background: color.paper }}>
+        <section style={{ flex: 1, minHeight: 0, padding: space[6], overflowY: 'auto', background: color.paperV6 }}>
           <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.ink, marginBottom: space[4] }}>
             Life Formula — Dashboard
           </div>
