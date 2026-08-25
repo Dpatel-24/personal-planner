@@ -95,6 +95,9 @@ export default function AppNav({
         <Link href="/dashboard" style={utilityLinkStyle(current === 'dashboard')}>
           Life Formula
         </Link>
+        <Link href="/life" style={utilityLinkStyle(current === 'life')}>
+          Life
+        </Link>
       </nav>
     </header>
   );

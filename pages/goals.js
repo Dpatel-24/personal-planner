@@ -15,6 +15,7 @@ import { buttonGhost, textMuted } from '@/lib/components';
 import AppNav from '@/components/AppNav';
 import GoalGraph from '@/components/GoalGraph';
 import TagManagerModal from '@/components/TagManagerModal';
+import PillTabs from '@/components/PillTabs';
 
 const TREE_LABELS = ['Short-Term', 'Long-Term', 'Completed'];
 const TREE_CATEGORIES = ['short_term', 'long_term']; // index-matched to TREE_LABELS[0..1] only — Completed (index 2) isn't category-scoped
@@ -279,30 +280,11 @@ export default function GoalsPage() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space[4], flexShrink: 0 }}>
-            <div style={{ display: 'flex', gap: space[2] }}>
-              {TREE_LABELS.slice(0, 2).map((label, i) => {
-                const active = activeTree === i;
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => setActiveTree(i)}
-                    style={{
-                      padding: `${space[1]} ${space[4]}`,
-                      borderRadius: radius.full,
-                      border: active ? 'none' : `1px solid ${color.muted}`,
-                      background: active ? color.ink : 'transparent',
-                      color: active ? color.white : color.muted,
-                      fontSize: font.size.sm,
-                      fontWeight: font.weight.medium,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
+            <PillTabs
+              options={TREE_LABELS.slice(0, 2)}
+              activeIndex={activeTree < 2 ? activeTree : -1}
+              onChange={setActiveTree}
+            />
             {/* Scoped to whichever tab is active — inserts a root with THAT
                 category, not a picker, since the tab already says which
                 tree the user is looking at. Hidden on Completed — you can't
