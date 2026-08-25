@@ -36,8 +36,8 @@ export default function AppNav({
     fontSize: font.size.md,
     fontWeight: active ? font.weight.semibold : font.weight.medium,
     fontFamily: font.family,
-    color: active ? color.accent : color.textMuted,
-    background: active ? color.accentSubtle : 'transparent',
+    color: active ? color.navy : color.mutedText,
+    background: active ? color.navySoft : 'transparent',
     textDecoration: 'none',
     display: 'inline-block',
   });
@@ -51,7 +51,7 @@ export default function AppNav({
     padding: `${space[1]} ${space[3]}`,
     fontSize: font.size.sm,
     textDecoration: 'none',
-    ...(active ? { color: color.accent, background: color.accentSubtle } : {}),
+    ...(active ? { color: color.navy, background: color.navySoft } : {}),
   });
 
   return (
@@ -63,8 +63,8 @@ export default function AppNav({
         flexWrap: 'wrap',
         gap: space[2],
         padding: `${space[3]} ${isMobile ? space[4] : space[6]}`,
-        borderBottom: border.default,
-        background: color.bg,
+        borderBottom: `1px solid ${color.borderSubtle}`,
+        background: color.paperV6,
         flexShrink: 0,
       }}
     >
