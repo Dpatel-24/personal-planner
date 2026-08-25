@@ -85,7 +85,7 @@ function MovingAverageChart({ series }) {
 
 function StatCard({ label, value, color: valueColor }) {
   return (
-    <div style={{ background: color.card, borderRadius: radius.lg, padding: space[4], flex: '1 1 160px', minWidth: 160 }}>
+    <div style={{ background: color.card, border: `1px solid ${color.lifeFormulaBorder}`, borderRadius: radius.lg, padding: space[4], flex: '1 1 160px', minWidth: 160 }}>
       <div style={{ fontSize: font.size.xs, color: color.muted, marginBottom: space[1] }}>{label}</div>
       <div style={{ fontSize: font.size.xxl, fontWeight: font.weight.bold, color: valueColor || color.ink }}>
         {value}
@@ -164,7 +164,7 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={state}
-                      style={{ background: color.card, borderRadius: radius.lg, padding: space[4], flex: '1 1 140px' }}
+                      style={{ background: color.card, border: `1px solid ${color.lifeFormulaBorder}`, borderRadius: radius.lg, padding: space[4], flex: '1 1 140px' }}
                     >
                       <div style={{ fontSize: font.size.xs, color: STATE_COLOR[state], fontWeight: font.weight.bold, marginBottom: space[1] }}>
                         {state}
@@ -181,7 +181,7 @@ export default function DashboardPage() {
                 <div style={sectionLabelStyle}>Weekly Trend</div>
                 <span style={{ fontSize: font.size.xs, color: color.muted }}>(last {stats.trend.length} weeks)</span>
               </div>
-              <div style={{ background: color.card, borderRadius: radius.lg, padding: space[4], maxWidth: 560, marginBottom: space[3] }}>
+              <div style={{ background: color.card, border: `1px solid ${color.lifeFormulaBorder}`, borderRadius: radius.lg, padding: space[4], maxWidth: 560, marginBottom: space[3] }}>
                 {stats.trend.map((entry) => (
                   <div
                     key={entry.id}
@@ -222,7 +222,7 @@ export default function DashboardPage() {
                   {stats.fourWeekAvg !== null ? `current: ${stats.fourWeekAvg.toFixed(4)}` : 'needs 4+ weeks'}
                 </span>
               </div>
-              <div style={{ background: color.card, borderRadius: radius.lg, padding: space[4], maxWidth: 560, marginBottom: space[6] }}>
+              <div style={{ background: color.card, border: `1px solid ${color.lifeFormulaBorder}`, borderRadius: radius.lg, padding: space[4], maxWidth: 560, marginBottom: space[6] }}>
                 {stats.movingAverageTrend.length > 0 ? (
                   <MovingAverageChart series={stats.movingAverageTrend} />
                 ) : (
@@ -240,7 +240,7 @@ export default function DashboardPage() {
                       (rolled up from weekly entries — no separate monthly logging)
                     </span>
                   </div>
-                  <div style={{ background: color.card, borderRadius: radius.lg, overflow: 'hidden', maxWidth: 640, marginBottom: space[4] }}>
+                  <div style={{ background: color.card, border: `1px solid ${color.lifeFormulaBorder}`, borderRadius: radius.lg, overflow: 'hidden', maxWidth: 640, marginBottom: space[4] }}>
                     <div
                       style={{
                         display: 'grid',
@@ -281,7 +281,7 @@ export default function DashboardPage() {
                     ))}
                   </div>
 
-                  <div style={{ background: color.card, borderRadius: radius.lg, overflow: 'hidden', maxWidth: 320 }}>
+                  <div style={{ background: color.card, border: `1px solid ${color.lifeFormulaBorder}`, borderRadius: radius.lg, overflow: 'hidden', maxWidth: 320 }}>
                     <div
                       style={{
                         padding: `${space[2]} ${space[4]}`,
