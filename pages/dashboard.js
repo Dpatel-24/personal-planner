@@ -37,49 +37,79 @@ const sectionLabelStyle = {
   marginBottom: space[2],
 };
 
-// Plain SVG line chart — no charting library in this app (checked before
-// the earlier restyle prompt too), same "primitives composed in the
-// component" approach the bar-based Weekly Trend section already uses,
-// just SVG instead of stacked divs since a moving-average TREND reads
-// naturally as a line, not a bar per week. `series` is
-// lib/lifeFormulaStats.js's movingAverageSeries() output — [{week_label,
-// avg}], already in chronological order.
-function MovingAverageChart({ series }) {
-  const width = 560;
-  const height = 160;
+// Plain SVG line chart — no charting library in this app. Now plots TWO
+// series together (the dashboard's "momentum" centerpiece, per the ask to
+// focus on the trend over the bar graphs): the 4-week moving average (solid
+// ink line) and the 13-week/~3-month moving average (dashed muted line).
+// `series4`'s own week_labels are the master x-axis — series13 is always a
+// subset of it in the normal contiguous-weekly-entry case (it needs a
+// longer run of entries before its first point exists), so its points are
+// placed by looking up each label's x position in series4 rather than
+// assuming the two arrays line up index-for-index.
+function MovingAverageChart({ series4, series13 }) {
+  const width = 900;
+  const height = 260;
   const padTop = 24;
-  const padBottom = 28;
-  const padX = 24;
+  const padBottom = 32;
+  const padX = 32;
 
-  const values = series.map((p) => p.avg);
-  const minV = Math.min(...values);
-  const maxV = Math.max(...values);
+  const n = series4.length;
+  const xAt = (i) => (n === 1 ? width / 2 : padX + (i / (n - 1)) * (width - padX * 2));
+  const xIndexByLabel = new Map(series4.map((p, i) => [p.week_label, i]));
+
+  const allValues = [...series4.map((p) => p.avg), ...series13.map((p) => p.avg)];
+  const minV = Math.min(...allValues);
+  const maxV = Math.max(...allValues);
   const range = maxV - minV || 1; // flat series (all equal) — avoid a /0
   const plotH = height - padTop - padBottom;
+  const yFor = (v) => padTop + plotH - ((v - minV) / range) * plotH;
 
-  const points = series.map((p, i) => ({
-    ...p,
-    x: series.length === 1 ? width / 2 : padX + (i / (series.length - 1)) * (width - padX * 2),
-    y: padTop + plotH - ((p.avg - minV) / range) * plotH,
-  }));
+  const points4 = series4.map((p, i) => ({ ...p, x: xAt(i), y: yFor(p.avg) }));
+  const path4 = points4.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ');
 
-  const pathD = points.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ');
+  const points13 = series13
+    .filter((p) => xIndexByLabel.has(p.week_label))
+    .map((p) => ({ ...p, x: xAt(xIndexByLabel.get(p.week_label)), y: yFor(p.avg) }));
+  const path13 = points13.map((pt, i) => `${i === 0 ? 'M' : 'L'} ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`).join(' ');
+
+  // Up to 52 weeks of x-axis labels would collide — show at most ~12,
+  // evenly spaced, same idea as a normal chart-library tick reducer.
+  const labelEvery = Math.max(1, Math.ceil(n / 12));
+  const lastPoint4 = points4[points4.length - 1];
+  const lastPoint13 = points13[points13.length - 1];
 
   return (
     <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', fontFamily: font.family }}>
-      <path d={pathD} fill="none" stroke={color.ink} strokeWidth={2} />
-      {points.map((pt) => (
-        <g key={pt.week_label}>
-          <circle cx={pt.x} cy={pt.y} r={3.5} fill={color.ink} />
-          <text x={pt.x} y={pt.y - 10} textAnchor="middle" fontSize={10} fill={color.muted}>
-            {pt.avg.toFixed(2)}
-          </text>
-          <text x={pt.x} y={height - 8} textAnchor="middle" fontSize={9} fill={color.mutedFaint}>
+      {path13 && <path d={path13} fill="none" stroke={color.muted} strokeWidth={2} strokeDasharray="5 4" />}
+      {path4 && <path d={path4} fill="none" stroke={color.ink} strokeWidth={2} />}
+      {points4.map((pt, i) =>
+        i % labelEvery === 0 ? (
+          <text key={pt.week_label} x={pt.x} y={height - 10} textAnchor="middle" fontSize={9} fill={color.mutedFaint}>
             {pt.week_label}
           </text>
-        </g>
-      ))}
+        ) : null
+      )}
+      {lastPoint4 && <circle cx={lastPoint4.x} cy={lastPoint4.y} r={4} fill={color.ink} />}
+      {lastPoint13 && <circle cx={lastPoint13.x} cy={lastPoint13.y} r={4} fill={color.muted} />}
     </svg>
+  );
+}
+
+// Small solid/dashed legend for the two lines above — kept as its own
+// component since MovingAverageChart is pure SVG (no room for HTML labels
+// inside it) and the legend needs normal text rendering.
+function MovingAverageLegend() {
+  const item = { display: 'flex', alignItems: 'center', gap: space[1] };
+  const swatch = (dashed) => (
+    <svg width="16" height="8" style={{ flexShrink: 0 }}>
+      <line x1="0" y1="4" x2="16" y2="4" stroke={dashed ? color.muted : color.ink} strokeWidth={2} strokeDasharray={dashed ? '5 4' : undefined} />
+    </svg>
+  );
+  return (
+    <div style={{ display: 'flex', gap: space[4], fontSize: font.size.xs, color: color.muted, marginBottom: space[2] }}>
+      <div style={item}>{swatch(false)} 4-week moving average</div>
+      <div style={item}>{swatch(true)} 13-week (~3 month) moving average</div>
+    </div>
   );
 }
 
@@ -149,11 +179,48 @@ export default function DashboardPage() {
             <>
               <div style={sectionLabelStyle}>At a Glance</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: space[3], marginBottom: space[6] }}>
-                <StatCard label="Current L(t)" value={stats.currentScore} />
-                <StatCard label="Annual Avg" value={stats.annualAverage.toFixed(4)} />
-                <StatCard label="Peak Score" value={stats.peakScore} />
+                <StatCard label="Current L(t)" value={Number(stats.currentScore).toFixed(2)} />
+                <StatCard label="Annual Avg" value={stats.annualAverage.toFixed(2)} />
+                <StatCard label="Peak Score" value={Number(stats.peakScore).toFixed(2)} />
                 <StatCard label="Current State" value={stats.currentState} color={STATE_COLOR[stats.currentState]} />
                 <StatCard label="Weeks Logged" value={stats.weeksLogged} />
+              </div>
+
+              {/* Momentum — the dashboard's centerpiece per the ask to focus
+                  on the trend over the bar graphs/raw numbers: moved up
+                  here (right under At a Glance) and enlarged, rather than a
+                  small chart sitting below Weekly Trend/Monthly Log. */}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: space[2], marginBottom: space[2] }}>
+                <div style={sectionLabelStyle}>Momentum</div>
+                <span style={{ fontSize: font.size.xs, color: color.muted }}>
+                  (last {stats.movingAverageTrend.length} weeks — moving averages)
+                </span>
+              </div>
+              <div style={{ background: color.card, border: `1px solid ${color.lifeFormulaBorder}`, borderRadius: radius.lg, padding: space[4], marginBottom: space[3] }}>
+                {stats.movingAverageTrend.length > 0 ? (
+                  <>
+                    <div style={{ display: 'flex', gap: space[6], marginBottom: space[3] }}>
+                      <div>
+                        <div style={{ fontSize: font.size.xs, color: color.muted }}>4-week current</div>
+                        <div style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.ink }}>
+                          {stats.fourWeekAvg !== null ? stats.fourWeekAvg.toFixed(2) : '—'}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: font.size.xs, color: color.muted }}>13-week (~3mo) current</div>
+                        <div style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: color.muted }}>
+                          {stats.thirteenWeekAvg !== null ? stats.thirteenWeekAvg.toFixed(2) : 'needs 13+ weeks'}
+                        </div>
+                      </div>
+                    </div>
+                    <MovingAverageLegend />
+                    <MovingAverageChart series4={stats.movingAverageTrend} series13={stats.movingAverageTrend13} />
+                  </>
+                ) : (
+                  <div style={{ fontSize: font.size.sm, color: color.muted }}>
+                    Needs at least 4 logged weeks before a moving-average trend can be plotted.
+                  </div>
+                )}
               </div>
 
               <div style={sectionLabelStyle}>State Distribution — Weekly</div>
@@ -210,26 +277,10 @@ export default function DashboardPage() {
                         flexShrink: 0,
                       }}
                     >
-                      {entry.score}
+                      {Number(entry.score).toFixed(2)}
                     </span>
                   </div>
                 ))}
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: space[2], marginBottom: space[2] }}>
-                <div style={sectionLabelStyle}>4-Week Moving Average</div>
-                <span style={{ fontSize: font.size.xs, color: color.muted }}>
-                  {stats.fourWeekAvg !== null ? `current: ${stats.fourWeekAvg.toFixed(4)}` : 'needs 4+ weeks'}
-                </span>
-              </div>
-              <div style={{ background: color.card, border: `1px solid ${color.lifeFormulaBorder}`, borderRadius: radius.lg, padding: space[4], maxWidth: 560, marginBottom: space[6] }}>
-                {stats.movingAverageTrend.length > 0 ? (
-                  <MovingAverageChart series={stats.movingAverageTrend} />
-                ) : (
-                  <div style={{ fontSize: font.size.sm, color: color.muted }}>
-                    Needs at least 4 logged weeks before a moving-average trend can be plotted.
-                  </div>
-                )}
               </div>
 
               {monthly && (
