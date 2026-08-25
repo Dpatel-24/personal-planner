@@ -28,6 +28,25 @@
   --color-state-momentum: #1a6b47;
   --color-state-stability: #92510a;
   --color-state-friction: #b93232;
+
+  /* V6 "Direction A" (monochrome + navy) — synced with lib/tokens.js's
+     inkV6/paperV6/surface/etc. -v6 suffix on the two that would otherwise
+     collide: --color-ink/--color-paper above are a DIFFERENT, older palette
+     (Goals/Life Formula/Dashboard), not part of this pass — reusing those
+     two names here would silently repaint pages nobody asked to touch,
+     same reasoning as lib/tokens.js's inkV6/paperV6 rename. */
+  --color-ink-v6: #1c1c1e;
+  --color-paper-v6: #ffffff;
+  --color-surface: #f6f6f7;
+  --color-border-subtle: #ececee;
+  --color-muted-text: #999999;
+  --color-navy: #1f3a5f;
+  --color-navy-soft: #e4ebf3;
+  --color-navy-on: #ffffff;
+  --color-tag-admin: #c4622a;
+  --color-tag-admin-soft: #fff1e8;
+  --color-tag-personal: #555555;
+  --color-tag-personal-soft: #f0f0f0;
 }
 
 * {
@@ -43,8 +62,8 @@ body {
 }
 
 body {
-  color: #18181b;
-  background: #f7f7f8;
+  color: var(--color-ink-v6);
+  background: var(--color-paper-v6);
   /* Inter first (self-hosted via next/font/google, applied as --font-inter
      on a wrapper div in pages/_app.js — next/font can't run in
      _document.js on this Next version, confirmed via a real build error),
