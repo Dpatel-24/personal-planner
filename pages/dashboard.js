@@ -47,23 +47,43 @@ const sectionLabelStyle = {
 // series, never substituted with 0 — so a gap just breaks the line into
 // separate segments (buildPath starts a fresh 'M'), leaving blank space
 // instead of a fake dip to zero.
+// Picks a "nice" axis step (1/2/2.5/5 × a power of 10) for ~6 gridlines,
+// same rounding chart libraries use — so the y-axis reads 0.00/0.20/0.40/...
+// like the reference screenshot, not an arbitrary fraction of the real max.
+function niceStep(maxV) {
+  const rough = maxV / 6;
+  const mag = Math.pow(10, Math.floor(Math.log10(rough || 1)));
+  const norm = rough / mag;
+  let step;
+  if (norm <= 1) step = 1;
+  else if (norm <= 2) step = 2;
+  else if (norm <= 2.5) step = 2.5;
+  else if (norm <= 5) step = 5;
+  else step = 10;
+  return step * mag;
+}
+
 function TrendChart({ labels, seriesA, seriesB, labelA, labelB }) {
   const width = 1400;
   const height = 260;
-  const padTop = 24;
+  const padTop = 16;
   const padBottom = 32;
-  const padX = 24;
+  const padLeft = 48;
+  const padRight = 16;
   const n = labels.length;
-  const xAt = (i) => (n === 1 ? width / 2 : padX + (i / (n - 1)) * (width - padX * 2));
+  const xAt = (i) => (n === 1 ? (padLeft + width - padRight) / 2 : padLeft + (i / (n - 1)) * (width - padLeft - padRight));
 
   const allValues = [...Object.values(seriesA), ...Object.values(seriesB)];
   const hasData = allValues.length > 0;
-  // Baseline always includes 0 (matches the reference's own y-axis, which
-  // starts at 0.00 on both charts) — headroom above the real max so the
-  // line doesn't touch the top edge.
-  const maxV = hasData ? Math.max(...allValues, 0.1) * 1.15 : 1;
+  // Baseline always 0, axis top rounded up to the next "nice" gridline above
+  // the real max (matches the reference's own 0.00-anchored y-axis with
+  // round tick steps, e.g. 0.20 increments, rather than an arbitrary scale).
+  const step = niceStep(hasData ? Math.max(...allValues, 0.1) : 1);
+  const maxV = hasData ? Math.ceil(Math.max(...allValues, 0.1) / step) * step : step * 6;
   const plotH = height - padTop - padBottom;
   const yFor = (v) => padTop + plotH - (v / maxV) * plotH;
+  const yTicks = [];
+  for (let t = 0; t <= maxV + step / 2; t += step) yTicks.push(t);
 
   const buildPath = (series) => {
     let d = '';
@@ -105,6 +125,17 @@ function TrendChart({ labels, seriesA, seriesB, labelA, labelB }) {
         </div>
       </div>
       <svg width="100%" viewBox={`0 0 ${width} ${height}`} style={{ display: 'block', fontFamily: font.family }}>
+        {yTicks.map((t) => {
+          const y = yFor(t);
+          return (
+            <g key={t}>
+              <line x1={padLeft} y1={y} x2={width - padRight} y2={y} stroke={color.lifeFormulaBorder} strokeWidth={1} />
+              <text x={padLeft - 8} y={y} textAnchor="end" dominantBaseline="middle" fontSize={9} fill={color.mutedFaint}>
+                {t.toFixed(2)}
+              </text>
+            </g>
+          );
+        })}
         {pathB && <path d={pathB} fill="none" stroke={color.muted} strokeWidth={2} strokeDasharray="5 4" />}
         {pathA && <path d={pathA} fill="none" stroke={color.ink} strokeWidth={2} />}
         {labels.map((label, i) =>
