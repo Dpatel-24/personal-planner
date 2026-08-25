@@ -215,13 +215,13 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
         gap: space[1],
         padding: `0 ${space[1]}`,
         borderRadius: radius.sm,
-        // V6: match Board/Calendar's task-card language instead of the old
-        // always-on accent tint — plain surface, or the instance's own tag
-        // color if it has one (same getTagCardStyle every other view uses).
-        // Done state is opacity (below) + strikethrough, not a color swap.
-        background: instance.tag ? undefined : color.surface,
+        // V6 (exploring): grey surface fallback blended blocks together with
+        // no clear separation — trying navy tint + a navy outline instead
+        // (same idea as the pre-V6 always-on accent tint, just navy). Tagged
+        // instances still get their own tag color via getTagCardStyle.
+        background: instance.tag ? undefined : color.navySoft,
         ...getTagCardStyle(instance.tag),
-        border: `1px solid ${color.borderSubtle}`,
+        border: `1px solid ${color.navy}`,
         opacity: done ? 0.6 : 1,
         overflow: 'hidden',
         cursor: 'pointer',
