@@ -30,6 +30,7 @@ import { todayStr, humanDate } from '@/lib/dates';
 import { isLifeFormulaEntryTask } from '@/lib/lifeFormulaLink';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { input as inputStyle, buttonPrimary, buttonSecondary, buttonGhost, heading, textMuted } from '@/lib/components';
+import { getTagCardStyle } from '@/lib/tag-styles';
 import { useRefresh } from './RefreshContext';
 import RecurringCreateModal from './RecurringCreateModal';
 import EditModal from './EditModal';
@@ -214,8 +215,14 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
         gap: space[1],
         padding: `0 ${space[1]}`,
         borderRadius: radius.sm,
-        background: done ? color.bgMuted : color.accentSubtle,
-        border: `1px solid ${done ? color.border : color.accent}`,
+        // V6: match Board/Calendar's task-card language instead of the old
+        // always-on accent tint — plain surface, or the instance's own tag
+        // color if it has one (same getTagCardStyle every other view uses).
+        // Done state is opacity (below) + strikethrough, not a color swap.
+        background: instance.tag ? undefined : color.surface,
+        ...getTagCardStyle(instance.tag),
+        border: `1px solid ${color.borderSubtle}`,
+        opacity: done ? 0.6 : 1,
         overflow: 'hidden',
         cursor: 'pointer',
       }}
@@ -306,7 +313,9 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
             flex: 1,
             minWidth: 0,
             fontSize: font.size.xs,
-            color: done ? color.textMuted : color.text,
+            // V6: done state is the block's own opacity dim (above) + this
+            // strikethrough — title color stays constant either way.
+            color: color.inkV6,
             textDecoration: done ? 'line-through' : 'none',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
