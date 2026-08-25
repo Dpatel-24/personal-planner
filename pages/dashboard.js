@@ -75,11 +75,21 @@ function TrendChart({ labels, seriesA, seriesB, labelA, labelB }) {
 
   const allValues = [...Object.values(seriesA), ...Object.values(seriesB)];
   const hasData = allValues.length > 0;
-  // Baseline always 0, axis top rounded up to the next "nice" gridline above
-  // the real max (matches the reference's own 0.00-anchored y-axis with
-  // round tick steps, e.g. 0.20 increments, rather than an arbitrary scale).
-  const step = niceStep(hasData ? Math.max(...allValues, 0.1) : 1);
-  const maxV = hasData ? Math.ceil(Math.max(...allValues, 0.1) / step) * step : step * 6;
+  const realMax = hasData ? Math.max(...allValues, 0.1) : 0;
+  // Axis always reaches at least 2.0 (the classifyState Momentum threshold
+  // — lib/lifeFormula.js's own classifyState()) with clean 0.20 steps, so
+  // the chart always shows where Stability/Momentum sit even when real
+  // scores are still well below that. If real data ever exceeds 2.0, the
+  // axis extends further using the same "nice" rounding instead of a hard
+  // cap that would clip the line.
+  let step, maxV;
+  if (realMax <= 2.0) {
+    step = 0.2;
+    maxV = 2.0;
+  } else {
+    step = niceStep(realMax);
+    maxV = Math.ceil(realMax / step) * step;
+  }
   const plotH = height - padTop - padBottom;
   const yFor = (v) => padTop + plotH - (v / maxV) * plotH;
   const yTicks = [];
