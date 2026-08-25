@@ -4,31 +4,33 @@
 // no-sidebar shape (header + content, no aside), this app's established
 // pattern for a new top-level section.
 //
-// VISUAL RESTYLE ONLY (this pass): three colored zones — Coherence
-// (numerator), Resistance (denominator), Execution — using the tokens added
-// in the prior prompt (lib/tokens.js's coherence/resistance/execution/ink
-// keys, same literal values as styles/globals.css's CSS custom properties).
-// The input MECHANISM is untouched: still the same 5-button group per
-// metric from the foundation build, just re-themed per zone instead of the
-// generic purple accent — a click still calls the same setMetric(key, n),
-// still 9 fields x 5 options, still one click each. No changes to state
-// shape, validation, or the createLifeFormulaEntry/calculateLifeFormula
-// call below.
+// ENTRY-FORM RESTYLE (2026-08, locked spec): three zone cards (Coherence/
+// Resistance/Execution), each an uppercase letter-spaced eyebrow PILL above
+// a white bordered card, one row per field (label left, 1-5 button-group
+// right). Submit live-computes L(t) via the existing calculateLifeFormula —
+// not reimplemented here — and is disabled with "complete all fields" until
+// all 9 metrics have a value. This pass is the entry form ONLY: the
+// dashboard (pages/dashboard.js) and its own components are untouched, and
+// this file still writes through the exact same createLifeFormulaEntry call
+// and /dashboard redirect the dashboard already reads from — no new write
+// path, no schema change, no calculation change.
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
 import { createLifeFormulaEntry } from '@/lib/lifeFormulaStats';
+import { calculateLifeFormula } from '@/lib/lifeFormula';
 import { isoWeekLabel } from '@/lib/dates';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { buttonGhost, textMuted } from '@/lib/components';
 
-// Same 9 metrics as the foundation build, now grouped into the three zones
-// the restyle spec calls for. Keys/labels unchanged — only the grouping and
-// per-zone color are new.
+// Same 9 metrics as before, grouped into the three zones the spec calls for.
+// Values start unanswered (null), not pre-filled — the spec's "disable
+// submit until all 9 fields are answered" only means something if a field
+// can actually be in an unanswered state.
 const ZONES = [
   {
-    title: 'Numerator — Coherence',
+    eyebrow: 'NUMERATOR — COHERENCE',
     bg: color.coherenceBg,
     text: color.coherenceText,
     metrics: [
@@ -40,7 +42,7 @@ const ZONES = [
     ],
   },
   {
-    title: 'Denominator — Resistance',
+    eyebrow: 'DENOMINATOR — RESISTANCE',
     bg: color.resistanceBg,
     text: color.resistanceText,
     metrics: [
@@ -50,25 +52,32 @@ const ZONES = [
     ],
   },
   {
-    title: 'Execution',
+    eyebrow: 'MULTIPLIER — EXECUTION',
     bg: color.executionBg,
     text: color.executionText,
     metrics: [['execution', 'Execution']],
   },
 ];
 
-const DEFAULT_VALUES = Object.fromEntries(ZONES.flatMap((z) => z.metrics.map(([key]) => [key, 3])));
+const ALL_KEYS = ZONES.flatMap((z) => z.metrics.map(([key]) => key));
+const DEFAULT_VALUES = Object.fromEntries(ALL_KEYS.map((key) => [key, null]));
 
-// One metric's button-group, re-themed to its zone's bg/text pair. Same
-// mechanism as the foundation build (5 buttons, one click sets the value) —
-// only the selected/unselected styling changed: selected inverts to a solid
-// zoneText pill (the "value color"), unselected sits on a plain card with a
-// zoneText-tinted border, both directly on the zone's tinted card background.
-function ZoneMetricCard({ zoneBg, zoneText, metricLabel, value, onChange }) {
+// One field row: label left (12.5px medium, ink), 1-5 button-group right.
+// Selecting a button writes that field's value immediately — no separate
+// confirm step, same as the mechanism this replaces.
+function FieldRow({ label, value, onChange, zoneText }) {
   return (
-    <div style={{ background: zoneBg, borderRadius: radius.lg, padding: space[3], marginBottom: space[2] }}>
-      <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: zoneText, marginBottom: space[2] }}>
-        {metricLabel}
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: space[2],
+        padding: `${space[1]} 0`,
+      }}
+    >
+      <div style={{ fontSize: '12.5px', fontWeight: font.weight.medium, color: color.ink, fontFamily: font.family }}>
+        {label}
       </div>
       <div style={{ display: 'flex', gap: space[1] }}>
         {[1, 2, 3, 4, 5].map((n) => {
@@ -78,16 +87,22 @@ function ZoneMetricCard({ zoneBg, zoneText, metricLabel, value, onChange }) {
               key={n}
               type="button"
               onClick={() => onChange(n)}
+              aria-label={`${label}: ${n}`}
+              aria-pressed={selected}
               style={{
-                flex: 1,
-                padding: `${space[2]} 0`,
-                borderRadius: radius.md,
-                border: selected ? 'none' : `1px solid ${zoneText}`,
-                background: selected ? zoneText : color.card,
-                color: selected ? color.white : zoneText,
-                fontWeight: font.weight.semibold,
+                width: 22,
+                height: 22,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 0,
+                borderRadius: radius.sm,
+                border: 'none',
+                background: selected ? zoneText : color.lifeFormulaButtonBg,
+                color: selected ? color.white : color.muted,
                 fontFamily: font.family,
-                fontSize: font.size.md,
+                fontSize: '10.5px',
+                fontWeight: font.weight.bold,
                 cursor: 'pointer',
               }}
             >
@@ -100,36 +115,53 @@ function ZoneMetricCard({ zoneBg, zoneText, metricLabel, value, onChange }) {
   );
 }
 
-// The zone's own labeled strip — small bold uppercase label, zoneText on
-// zoneBg — plus its metric cards underneath.
-function Zone({ title, bg, text, metrics, values, onChange }) {
+// Eyebrow pill — uppercase, letter-spaced, small bold, zone bg/text, fully
+// rounded. Sits above (not inside) the zone's own white card.
+function Eyebrow({ label, bg, text }) {
   return (
-    <div style={{ marginBottom: space[6] }}>
+    <div
+      style={{
+        display: 'inline-block',
+        background: bg,
+        color: text,
+        padding: `3px ${space[2]}`,
+        borderRadius: radius.full,
+        fontSize: '10px',
+        fontWeight: font.weight.bold,
+        fontFamily: font.family,
+        textTransform: 'uppercase',
+        letterSpacing: '0.06em',
+        marginBottom: space[2],
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+// Zone: eyebrow pill + white card (1px lifeFormulaBorder, 8px radius, 12px
+// padding) containing that zone's field rows, divided by hairlines.
+function Zone({ eyebrow, bg, text, metrics, values, onChange }) {
+  return (
+    <div style={{ marginBottom: space[4] }}>
+      <Eyebrow label={eyebrow} bg={bg} text={text} />
       <div
         style={{
-          background: bg,
-          color: text,
-          padding: `${space[2]} ${space[3]}`,
-          borderRadius: radius.md,
-          fontSize: font.size.xs,
-          fontWeight: font.weight.bold,
-          textTransform: 'uppercase',
-          letterSpacing: '0.06em',
-          marginBottom: space[3],
+          background: color.card,
+          border: `1px solid ${color.lifeFormulaBorder}`,
+          borderRadius: radius.lg,
+          padding: space[3],
         }}
       >
-        {title}
+        {metrics.map(([key, label], i) => (
+          <div
+            key={key}
+            style={i < metrics.length - 1 ? { borderBottom: `1px solid ${color.lifeFormulaBorder}` } : undefined}
+          >
+            <FieldRow label={label} value={values[key]} onChange={(n) => onChange(key, n)} zoneText={text} />
+          </div>
+        ))}
       </div>
-      {metrics.map(([key, metricLabel]) => (
-        <ZoneMetricCard
-          key={key}
-          zoneBg={bg}
-          zoneText={text}
-          metricLabel={metricLabel}
-          value={values[key]}
-          onChange={(n) => onChange(key, n)}
-        />
-      ))}
     </div>
   );
 }
@@ -142,10 +174,22 @@ export default function LifeFormulaPage() {
 
   const setMetric = (key, n) => setValues((prev) => ({ ...prev, [key]: n }));
 
-  // Unchanged from the foundation build — same createLifeFormulaEntry call,
+  const allAnswered = ALL_KEYS.every((key) => values[key] !== null);
+  // calculateLifeFormula itself is untouched — imported and called as-is,
+  // only ever with a fully-answered values object (guarded by allAnswered)
+  // so its own divide-by-zero guard never has a reason to fire here.
+  const liveScore = allAnswered ? calculateLifeFormula(values).score : null;
+  const submitLabel = busy
+    ? 'Saving…'
+    : allAnswered
+      ? `Submit — L(t) = ${liveScore}`
+      : 'Submit — complete all fields';
+
+  // Unchanged from before this restyle — same createLifeFormulaEntry call,
   // same computed-score-and-state-at-insert-time behavior, same redirect.
   const submit = async (e) => {
     e.preventDefault();
+    if (!allAnswered) return;
     setBusy(true);
     setError(null);
     try {
@@ -179,7 +223,7 @@ export default function LifeFormulaPage() {
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', background: color.paper }}>
         <header style={headerStyle}>
           <div style={{ display: 'flex', alignItems: 'center', gap: space[3] }}>
-            <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.ink }}>
+            <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.ink, fontFamily: font.family }}>
               Life Formula — Weekly Check-In
             </div>
             <Link href="/" style={{ ...buttonGhost, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm, textDecoration: 'none' }}>
@@ -197,8 +241,8 @@ export default function LifeFormulaPage() {
             <form onSubmit={submit}>
               {ZONES.map((zone) => (
                 <Zone
-                  key={zone.title}
-                  title={zone.title}
+                  key={zone.eyebrow}
+                  eyebrow={zone.eyebrow}
                   bg={zone.bg}
                   text={zone.text}
                   metrics={zone.metrics}
@@ -213,19 +257,20 @@ export default function LifeFormulaPage() {
                 type="submit"
                 style={{
                   width: '100%',
-                  padding: `${space[2]} ${space[4]}`,
+                  padding: '10px',
                   borderRadius: radius.md,
                   border: 'none',
                   background: color.ink,
-                  color: color.white,
+                  color: color.paper,
                   fontFamily: font.family,
                   fontSize: font.size.md,
-                  fontWeight: font.weight.medium,
-                  cursor: 'pointer',
+                  fontWeight: font.weight.bold,
+                  cursor: allAnswered && !busy ? 'pointer' : 'not-allowed',
+                  opacity: allAnswered ? 1 : 0.6,
                 }}
-                disabled={busy}
+                disabled={busy || !allAnswered}
               >
-                {busy ? 'Saving…' : 'Submit'}
+                {submitLabel}
               </button>
             </form>
           </div>
