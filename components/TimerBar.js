@@ -8,7 +8,7 @@ import { useEffect, useState } from 'react';
 import { useTimer } from './TimerContext';
 import { useRefresh } from './RefreshContext';
 import { stopTimer, formatDuration } from '@/lib/timer-queries';
-import { color, space, border, font } from '@/lib/tokens';
+import { color, space, font } from '@/lib/tokens';
 import { buttonSecondary } from '@/lib/components';
 
 export default function TimerBar() {
@@ -47,18 +47,20 @@ export default function TimerBar() {
         alignItems: 'center',
         gap: space[3],
         padding: `${space[2]} ${space[6]}`,
-        background: color.accentSubtle,
-        borderBottom: border.default,
+        // V6: navy background, white text — the one "primary action" surface
+        // called out by name in the spec, not the old low-contrast accent tint.
+        background: color.navy,
         flexShrink: 0,
       }}
     >
-      <span style={{ fontSize: font.size.sm, color: color.text }}>
+      <span style={{ fontSize: font.size.sm, color: color.navyOn }}>
         Timing <strong>{activeTimer.instanceTitle}</strong>
       </span>
       <span
         style={{
           fontSize: font.size.sm,
-          color: color.textMuted,
+          color: color.navyOn,
+          opacity: 0.8,
           fontVariantNumeric: 'tabular-nums',
         }}
       >
@@ -66,7 +68,15 @@ export default function TimerBar() {
       </span>
       <button
         type="button"
-        style={{ ...buttonSecondary, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm, marginLeft: 'auto' }}
+        style={{
+          ...buttonSecondary,
+          background: color.navyOn,
+          color: color.navy,
+          border: 'none',
+          padding: `${space[1]} ${space[3]}`,
+          fontSize: font.size.sm,
+          marginLeft: 'auto',
+        }}
         onClick={stop}
         disabled={busy}
       >
