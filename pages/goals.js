@@ -4,7 +4,7 @@
 // for "a new page."
 //
 // No sidebar: pages/index.js's own mobile layout is this app's only existing
-// "no sidebar" precedent (the DailySidebar `aside` is conditionally omitted
+// "no sidebar" precedent (the ScheduleRail `aside` is conditionally omitted
 // below `useIsMobile()`, leaving just header + content) — mirrored here
 // unconditionally, header + content, no aside, at any width.
 import Head from 'next/head';

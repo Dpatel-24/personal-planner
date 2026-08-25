@@ -10,10 +10,10 @@
 // still opens the v1 edit flow; only the checkbox stops propagation so it can
 // toggle status independently of that click.
 //
-// No start-timer button here — that control lives in the sidebar (TaskRow.js)
-// only, since the sidebar is the "Today" control panel and every timeable
-// task passes through it. This card still shows the read-only total-tracked-
-// time (and colors it while timing) since that's informational, not a control.
+// No start-timer button here — starting a timer isn't exposed anywhere in
+// the current UI (see lib/timer-queries.js's startTimer). This card still
+// shows the read-only total-tracked-time (and colors it while timing)
+// since that's informational, not a control.
 import { useEffect, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';

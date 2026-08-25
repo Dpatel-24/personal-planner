@@ -5,9 +5,9 @@
 // done/todo (stopping propagation), and clicking the rest of the chip (no
 // pointer movement) opens the same EditModal the board uses.
 //
-// No start-timer button here — see WeekBoardCard.js's identical note: that
-// control lives only in the sidebar (TaskRow.js). This chip still shows the
-// read-only total-tracked-time, colored while timing.
+// No start-timer button here — see WeekBoardCard.js's identical note:
+// starting a timer isn't exposed anywhere in the current UI. This chip
+// still shows the read-only total-tracked-time, colored while timing.
 import { useEffect, useState } from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';

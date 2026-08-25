@@ -1,7 +1,7 @@
 // App shell: main pane with view tabs (Board / Calendar) + persistent daily
 // sidebar on desktop. On mobile (<=768px, see lib/useIsMobile.js) the sidebar
 // can't fit beside main content (it's 340px wide on its own), so it becomes a
-// third "Today" tab instead — same DailySidebar component, just relocated.
+// third "Today" tab instead — same ScheduleRail component, just relocated.
 import Head from 'next/head';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
