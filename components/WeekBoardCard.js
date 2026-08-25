@@ -84,7 +84,9 @@ export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onE
         touchAction: 'none',
         transform: CSS.Transform.toString(transform),
         transition,
-        opacity: isDragging ? 0.4 : busy ? 0.5 : 1,
+        // V6: done state is reduced opacity + strikethrough (below), never a
+        // color change — distinct from the transient isDragging/busy dims.
+        opacity: isDragging ? 0.4 : busy ? 0.5 : done ? 0.6 : 1,
       }}
       {...attributes}
       {...listeners}
@@ -119,7 +121,9 @@ export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onE
             <div
               style={{
                 fontSize: font.size.md,
-                color: done ? color.textMuted : color.text,
+                // V6: done state is the card's own opacity dim (above) +
+                // this strikethrough — title color stays constant either way.
+                color: color.inkV6,
                 textDecoration: done ? 'line-through' : 'none',
                 wordBreak: 'break-word',
               }}

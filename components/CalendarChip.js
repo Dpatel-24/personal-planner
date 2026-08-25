@@ -61,14 +61,16 @@ export default function CalendarChip({ instance, columnKey, onToggleStatus, onEd
         display: 'flex',
         alignItems: 'center',
         gap: 3,
-        background: instance.tag ? undefined : color.bgMuted,
+        background: instance.tag ? undefined : color.surface,
         ...getTagCardStyle(instance.tag),
         borderRadius: radius.sm,
         padding: `1px ${space[1]}`,
         marginBottom: 2,
         cursor: busy ? 'default' : 'grab',
         touchAction: 'none', // let dnd-kit own touch gestures on this chip
-        opacity: isDragging ? 0.4 : busy ? 0.6 : 1,
+        // V6: done state is reduced opacity + strikethrough (below), never a
+        // color change — distinct from the transient isDragging/busy dims.
+        opacity: isDragging ? 0.4 : busy ? 0.6 : done ? 0.6 : 1,
         transform: CSS.Transform.toString(transform),
         transition,
       }}
@@ -102,7 +104,10 @@ export default function CalendarChip({ instance, columnKey, onToggleStatus, onEd
       <span
         style={{
           fontSize: font.size.xs,
-          color: done || skipped ? color.textMuted : color.text,
+          // V6: done state is the chip's own opacity dim (above) + the
+          // strikethrough below — text color stays constant either way.
+          // skipped keeps its own muted/italic treatment (not a "done" state).
+          color: skipped ? color.textMuted : color.inkV6,
           textDecoration: done ? 'line-through' : 'none',
           fontStyle: skipped ? 'italic' : 'normal',
           whiteSpace: 'nowrap',
