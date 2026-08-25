@@ -111,10 +111,17 @@ function layoutForest(roots) {
       node.children.forEach((child) => edges.push({ from: node.id, to: child.id }));
     }
     const leaves = isLeaf ? null : countLeaves(node);
+    // "Complete" for a ROOT specifically — a leaf root is complete when its
+    // own done flag is set; a non-leaf root is complete when every leaf
+    // under it is done (100%, and it actually has leaves — an empty
+    // non-leaf can't be "complete"). Only meaningful on root nodes; computed
+    // unconditionally anyway since it's cheap and harmless elsewhere.
+    const complete = isLeaf ? !!node.done : leaves.total > 0 && leaves.done === leaves.total;
     nodes.push({
       id: node.id,
       title: node.title,
       done: node.done,
+      complete,
       isLeaf,
       isRoot,
       width,
@@ -192,7 +199,18 @@ function LeafCheckbox({ checked, onToggle }) {
   );
 }
 
-export default function GoalGraph({ data, onToggleLeaf, onRename, onAddSubgoal, onDeleteGoal, autoEditId, onAutoEditConsumed }) {
+export default function GoalGraph({
+  data,
+  onToggleLeaf,
+  onRename,
+  onAddSubgoal,
+  onDeleteGoal,
+  onArchiveGoal,
+  onUnarchiveGoal,
+  archivedView = false,
+  autoEditId,
+  onAutoEditConsumed,
+}) {
   const { nodes, edges } = layoutForest(data);
   const nodesById = Object.fromEntries(nodes.map((n) => [n.id, n]));
 
@@ -357,6 +375,64 @@ export default function GoalGraph({ data, onToggleLeaf, onRename, onAddSubgoal, 
                   <span style={{ fontSize: font.size.xs, color: color.muted, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
                     {pct}%
                   </span>
+                )}
+                {/* Archive/Unarchive — root cards only. Archive only shows up
+                    once the root is actually complete (n.complete, computed
+                    in layoutForest above); Unarchive shows on every root
+                    card in the Completed view instead, the safety net back
+                    out. Text buttons, not icon-only — this is a rarer
+                    action than +/×, worth a label. */}
+                {n.isRoot && !archivedView && n.complete && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onArchiveGoal(n.id);
+                    }}
+                    aria-label={`Archive ${n.title}`}
+                    title="Move to Completed"
+                    style={{
+                      flexShrink: 0,
+                      padding: `2px ${space[2]}`,
+                      borderRadius: radius.full,
+                      border: `1px solid ${color.coherenceText}`,
+                      background: 'transparent',
+                      color: color.coherenceText,
+                      fontSize: 11,
+                      fontWeight: font.weight.medium,
+                      lineHeight: 1.4,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Archive
+                  </button>
+                )}
+                {n.isRoot && archivedView && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onUnarchiveGoal(n.id);
+                    }}
+                    aria-label={`Unarchive ${n.title}`}
+                    title="Move back out of Completed"
+                    style={{
+                      flexShrink: 0,
+                      padding: `2px ${space[2]}`,
+                      borderRadius: radius.full,
+                      border: `1px solid ${color.mutedFaint}`,
+                      background: 'transparent',
+                      color: color.muted,
+                      fontSize: 11,
+                      fontWeight: font.weight.medium,
+                      lineHeight: 1.4,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Unarchive
+                  </button>
                 )}
                 <button
                   type="button"

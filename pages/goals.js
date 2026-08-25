@@ -9,25 +9,29 @@
 // unconditionally, header + content, no aside, at any width.
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { listGoals, updateGoal, createGoal, deleteGoal } from '@/lib/goals-queries';
+import { listGoals, updateGoal, createGoal, deleteGoal, archiveGoals, unarchiveGoals } from '@/lib/goals-queries';
 import { color, space, radius, font } from '@/lib/tokens';
 import { buttonGhost, textMuted } from '@/lib/components';
 import AppNav from '@/components/AppNav';
 import GoalGraph from '@/components/GoalGraph';
 import TagManagerModal from '@/components/TagManagerModal';
 
-const TREE_LABELS = ['Short-Term', 'Long-Term'];
-const TREE_CATEGORIES = ['short_term', 'long_term']; // index-matched to TREE_LABELS
+const TREE_LABELS = ['Short-Term', 'Long-Term', 'Completed'];
+const TREE_CATEGORIES = ['short_term', 'long_term']; // index-matched to TREE_LABELS[0..1] only — Completed (index 2) isn't category-scoped
+const COMPLETED_TAB = 2;
 
 // Reshapes the flat `goals` list (as returned by listGoals(), each row
 // already carrying effective_category) into the nested {id, title, done,
 // children} forest GoalGraph expects, bucketed by root category. Real
 // goal UUIDs flow straight through as node ids — GoalGraph no longer
 // invents its own, since rename/toggle need to address the actual table
-// row, not a position-derived label.
+// row, not a position-derived label. Archived goals are excluded here —
+// they've moved to the Completed tab (buildCompletedForest below), not a
+// third bucket of these two.
 function buildGoalForests(goals) {
+  const active = goals.filter((g) => !g.is_archived);
   const childrenByParent = {};
-  for (const g of goals) {
+  for (const g of active) {
     const key = g.parent_id ?? 'root';
     (childrenByParent[key] ??= []).push(g);
   }
@@ -45,6 +49,29 @@ function buildGoalForests(goals) {
   );
 }
 
+// Completed tab's own forest — every ARCHIVED root (short-term or long-term
+// both land here together, one unified "place for completed goals" per the
+// ask, not a third category bucket) plus its descendants. A root's whole
+// subtree is archived together (see onArchiveGoal's descendantIds walk), so
+// every descendant found under an archived root is itself archived too —
+// no separate archived-vs-not filtering needed one level down.
+function buildCompletedForest(goals) {
+  const archivedRoots = goals.filter((g) => g.is_archived && !g.parent_id);
+  const childrenByParent = {};
+  for (const g of goals) {
+    if (g.parent_id) (childrenByParent[g.parent_id] ??= []).push(g);
+  }
+
+  function buildNode(g) {
+    const kids = childrenByParent[g.id] || [];
+    const node = { id: g.id, title: g.title, done: g.is_complete };
+    if (kids.length) node.children = kids.map(buildNode);
+    return node;
+  }
+
+  return archivedRoots.map(buildNode);
+}
+
 // Counts every descendant under `id` — NOT including id itself — by walking
 // the same flat `goals` list the page already has in hand, no extra round
 // trip. Deliberately a plain JS walk rather than get_goal_progress (that RPC
@@ -52,18 +79,26 @@ function buildGoalForests(goals) {
 // question from "how many rows total, leaf or not, hang off this one" that
 // the delete-confirmation copy needs).
 function countDescendants(goals, id) {
+  return descendantIds(goals, id).length;
+}
+
+// Same walk as countDescendants, but returns the actual id list instead of
+// just a count — archiveGoals/unarchiveGoals need every id in the subtree
+// (root + descendants) to flip in one round trip, not just how many there
+// are.
+function descendantIds(goals, id) {
   const childrenByParent = {};
   for (const g of goals) {
     if (g.parent_id) (childrenByParent[g.parent_id] ??= []).push(g.id);
   }
-  let count = 0;
+  const ids = [];
   const stack = [...(childrenByParent[id] || [])];
   while (stack.length) {
     const childId = stack.pop();
-    count += 1;
+    ids.push(childId);
     stack.push(...(childrenByParent[childId] || []));
   }
-  return count;
+  return ids;
 }
 
 export default function GoalsPage() {
@@ -84,6 +119,7 @@ export default function GoalsPage() {
   // every write (see `load()` below), a toggle or rename shows up here
   // automatically without extra state to keep in sync by hand.
   const forests = useMemo(() => buildGoalForests(goals), [goals]);
+  const completedForest = useMemo(() => buildCompletedForest(goals), [goals]);
 
   const onToggleLeaf = async (id) => {
     const goal = goals.find((g) => g.id === id);
@@ -157,6 +193,33 @@ export default function GoalsPage() {
     }
   };
 
+  // Archives a root goal (and its whole subtree, via descendantIds — a tree
+  // moves to Completed together, not just the one card) once it's complete.
+  // GoalGraph only ever calls this for a root whose own completeness it has
+  // already checked (isRootComplete), so no re-validation here — same
+  // division of labor as onDeleteGoal/onToggleLeaf.
+  const onArchiveGoal = async (id) => {
+    try {
+      await archiveGoals([id, ...descendantIds(goals, id)]);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  // Reverse of onArchiveGoal — same whole-tree id list, moves it back out of
+  // Completed into its original Short-Term/Long-Term tab (effective_category
+  // was never touched by archiving, so it lands back exactly where it came
+  // from).
+  const onUnarchiveGoal = async (id) => {
+    try {
+      await unarchiveGoals([id, ...descendantIds(goals, id)]);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   const load = useCallback(async () => {
     setError(null);
     try {
@@ -191,9 +254,33 @@ export default function GoalsPage() {
           {loading && <div style={textMuted}>Loading…</div>}
           {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
 
+          {/* Completed sits in its own row, above the Short-Term/Long-Term +
+              "+ Add Root Goal" row below — per the explicit ask, not folded
+              into the same row as that button. Styled distinctly (outline
+              pill, not the filled Short-Term/Long-Term style) so it doesn't
+              read as a third peer category, just a separate archive view. */}
+          <div style={{ marginBottom: space[2], flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => setActiveTree(COMPLETED_TAB)}
+              style={{
+                padding: `${space[1]} ${space[4]}`,
+                borderRadius: radius.full,
+                border: `1px solid ${activeTree === COMPLETED_TAB ? color.ink : color.mutedFaint}`,
+                background: activeTree === COMPLETED_TAB ? color.ink : 'transparent',
+                color: activeTree === COMPLETED_TAB ? color.white : color.muted,
+                fontSize: font.size.sm,
+                fontWeight: font.weight.medium,
+                cursor: 'pointer',
+              }}
+            >
+              Completed
+            </button>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space[4], flexShrink: 0 }}>
             <div style={{ display: 'flex', gap: space[2] }}>
-              {TREE_LABELS.map((label, i) => {
+              {TREE_LABELS.slice(0, 2).map((label, i) => {
                 const active = activeTree === i;
                 return (
                   <button
@@ -218,10 +305,13 @@ export default function GoalsPage() {
             </div>
             {/* Scoped to whichever tab is active — inserts a root with THAT
                 category, not a picker, since the tab already says which
-                tree the user is looking at. */}
-            <button type="button" style={buttonGhost} onClick={onAddRootGoal}>
-              + Add Root Goal
-            </button>
+                tree the user is looking at. Hidden on Completed — you can't
+                add directly to an archive view. */}
+            {activeTree !== COMPLETED_TAB && (
+              <button type="button" style={buttonGhost} onClick={onAddRootGoal}>
+                + Add Root Goal
+              </button>
+            )}
           </div>
 
           {/* Left-to-right graph layout, now backed by the real `goals`
@@ -233,21 +323,33 @@ export default function GoalsPage() {
               forests[activeTree] is briefly empty on first paint even when
               the category isn't actually empty) — gate the whole branch on
               `!loading`, not just the "genuinely empty" message. */}
-          {!loading && (
-            forests[activeTree].length === 0 ? (
-              <div style={textMuted}>No {TREE_LABELS[activeTree].toLowerCase()} goals yet. Add one above.</div>
-            ) : (
+          {!loading && (() => {
+            const isCompleted = activeTree === COMPLETED_TAB;
+            const activeData = isCompleted ? completedForest : forests[activeTree];
+            if (activeData.length === 0) {
+              return (
+                <div style={textMuted}>
+                  {isCompleted
+                    ? 'No completed goals archived yet — complete a root goal, then Archive it from its card.'
+                    : `No ${TREE_LABELS[activeTree].toLowerCase()} goals yet. Add one above.`}
+                </div>
+              );
+            }
+            return (
               <GoalGraph
-                data={forests[activeTree]}
+                data={activeData}
                 onToggleLeaf={onToggleLeaf}
                 onRename={onRename}
                 onAddSubgoal={onAddSubgoal}
                 onDeleteGoal={onDeleteGoal}
+                onArchiveGoal={onArchiveGoal}
+                onUnarchiveGoal={onUnarchiveGoal}
+                archivedView={isCompleted}
                 autoEditId={autoEditId}
                 onAutoEditConsumed={() => setAutoEditId(null)}
               />
-            )
-          )}
+            );
+          })()}
         </section>
       </div>
 
