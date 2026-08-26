@@ -139,30 +139,35 @@ export default function LifePage() {
         <AppNav current="life" />
 
         <section style={{ flex: 1, minHeight: 0, padding: space[6], overflow: 'auto' }}>
-          {error && <div style={{ color: NEGATIVE, marginBottom: space[3] }}>{error}</div>}
-          {loading && <div style={textMuted}>Loading…</div>}
+          {error && <div style={{ color: NEGATIVE, marginBottom: space[3], maxWidth: 640, margin: '0 auto' }}>{error}</div>}
+          {loading && <div style={{ ...textMuted, maxWidth: 640, margin: '0 auto' }}>Loading…</div>}
 
-          <div style={{ marginBottom: space[4] }}>
-            <PillTabs options={YEARS.map(String)} activeIndex={yearIndex} onChange={setYearIndex} />
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: space[4] }}>
-            <div style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: INK, fontFamily: font.family }}>
-              {year}
+          {/* Toggle, header, and grid all share this one maxWidth:640
+              container, centered on the page — the day counter sits at the
+              header row's own right edge, which now lines up with the
+              grid's right edge directly below it (top-right of the circle
+              grid), instead of the header spanning the full page width. */}
+          <div style={{ maxWidth: 640, margin: '0 auto' }}>
+            <div style={{ marginBottom: space[4] }}>
+              <PillTabs options={YEARS.map(String)} activeIndex={yearIndex} onChange={setYearIndex} />
             </div>
-            <div style={{ fontSize: font.size.sm, color: NEUTRAL, fontFamily: font.family }}>
-              Day {dayCount} of 365
-            </div>
-          </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: `repeat(${COLUMNS}, 1fr)`,
-              gap: GAP,
-              maxWidth: 640,
-            }}
-          >
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: space[4] }}>
+              <div style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: INK, fontFamily: font.family }}>
+                {year}
+              </div>
+              <div style={{ fontSize: font.size.sm, color: NEUTRAL, fontFamily: font.family }}>
+                Day {dayCount} of 365
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${COLUMNS}, 1fr)`,
+                gap: GAP,
+              }}
+            >
             {dates.map((dateStr) => {
               const isFuture = dateStr > todayStr;
               const isToday = dateStr === todayStr;
@@ -188,6 +193,7 @@ export default function LifePage() {
                 />
               );
             })}
+            </div>
           </div>
         </section>
       </div>
