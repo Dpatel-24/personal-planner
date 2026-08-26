@@ -52,7 +52,7 @@ function keyToScheduledDate(key) {
   return key;
 }
 
-export default function CalendarView() {
+export default function CalendarView({ onManageTags }) {
   const router = useRouter();
   const { version, refresh } = useRefresh();
   const today = todayStr();
@@ -217,7 +217,7 @@ export default function CalendarView() {
             </option>
           ))}
         </select>
-        <TagFilterDropdown tags={availableTags} selected={selectedTags} onChange={setSelectedTags} />
+        <TagFilterDropdown tags={availableTags} selected={selectedTags} onChange={setSelectedTags} onManageTags={onManageTags} />
         <div style={{ display: 'flex', gap: space[1], marginLeft: 'auto' }}>
           <button style={navBtn} onClick={() => shiftMonth(-1)}>
             Prev

@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { color, space, radius, border, font, elevation, zIndex } from '@/lib/tokens';
 import { buttonSecondary } from '@/lib/components';
 
-export default function TagFilterDropdown({ tags, selected, onChange }) {
+export default function TagFilterDropdown({ tags, selected, onChange, onManageTags }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
 
@@ -101,6 +101,36 @@ export default function TagFilterDropdown({ tags, selected, onChange }) {
               }}
             >
               Clear
+            </button>
+          )}
+          {/* Moved here from the app header — consolidated into the tags
+              selector since it's a tags-focused action. Sits at the bottom
+              of the dropdown, same TagManagerModal/onManageTags trigger as
+              before, just relocated. Closes the dropdown itself on click so
+              the modal doesn't open behind an still-open popup. */}
+          {onManageTags && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                onManageTags();
+              }}
+              style={{
+                marginTop: space[1],
+                width: '100%',
+                textAlign: 'left',
+                background: 'transparent',
+                border: 'none',
+                borderTop: border.default,
+                color: color.text,
+                fontSize: font.size.sm,
+                fontWeight: font.weight.medium,
+                fontFamily: font.family,
+                cursor: 'pointer',
+                padding: `${space[2]} ${space[1]} ${space[1]}`,
+              }}
+            >
+              Manage Tags
             </button>
           )}
         </div>

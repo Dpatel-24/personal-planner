@@ -23,7 +23,6 @@ export default function AppNav({
   localTabs,
   activeLocalTab,
   onLocalTabChange,
-  onManageTags,
   isMobile = false,
 }) {
   // Matches pages/index.js's original tabBtn exactly: font.size.md, no
@@ -86,9 +85,11 @@ export default function AppNav({
             </Link>
           </>
         )}
-        <button type="button" style={{ ...buttonGhost, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm }} onClick={onManageTags}>
-          Manage tags
-        </button>
+        {/* Manage Tags button moved into CalendarView's TagFilterDropdown
+            (bottom of that dropdown) — consolidated there since tag
+            management is a tags-focused action, not a nav-level one. Same
+            TagManagerModal, same trigger semantics, just relocated; no
+            header entry point anymore. */}
         <Link href="/goals" style={utilityLinkStyle(current === 'goals')}>
           Goals
         </Link>

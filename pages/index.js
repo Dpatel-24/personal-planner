@@ -80,7 +80,7 @@ export default function Home() {
               }}
             >
               {tab === 'Board' && <WeekBoardView />}
-              {tab === 'Calendar' && <CalendarView />}
+              {tab === 'Calendar' && <CalendarView onManageTags={() => setManagingTags(true)} />}
               {/* Schedule Rail V5: the Today sidebar/tab IS the rail on
                   both platforms now — no separate plain task-list view and
                   no separate third rail column beside the sidebar. Rail is
