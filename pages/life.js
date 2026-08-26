@@ -22,7 +22,7 @@ const FUTURE = '#F4F4F4';
 const UNLOGGED = '#ECECEC';
 
 const YEARS = [2026, 2027];
-const COLUMNS = 30;
+const COLUMNS = 24;
 const GAP = '7px';
 
 // unlogged -> positive -> neutral -> negative -> unlogged, looping. `null`
