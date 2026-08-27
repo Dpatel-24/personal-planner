@@ -99,6 +99,9 @@ export default function AppNav({
         <Link href="/life" style={utilityLinkStyle(current === 'life')}>
           Life
         </Link>
+        <Link href="/books" style={utilityLinkStyle(current === 'books')}>
+          Books
+        </Link>
       </nav>
     </header>
   );
