@@ -67,7 +67,7 @@ export default function AppNav({
         flexShrink: 0,
       }}
     >
-      <div style={{ ...heading, fontSize: font.size.lg }}>Planner</div>
+      <div style={{ ...heading, fontSize: font.size.lg }}>OS</div>
       <nav style={{ display: 'flex', alignItems: 'center', gap: space[1] }}>
         {localTabs ? (
           localTabs.map((t) => (

@@ -227,7 +227,7 @@ export default function LifeFormulaPage() {
               Life Formula — Weekly Check-In
             </div>
             <Link href="/" style={{ ...buttonGhost, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm, textDecoration: 'none' }}>
-              ← Planner
+              ← OS
             </Link>
           </div>
         </header>
