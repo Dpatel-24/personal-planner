@@ -110,6 +110,13 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
   const height = Math.max(dragHeight ?? baseHeightPx, MIN_BLOCK_HEIGHT);
 
   const onHandlePointerDown = (e) => {
+    // Pinned tasks (Morning Chain/Evening Winddown) never resize — their
+    // duration/position is re-clamped every load regardless
+    // (assignTodaySchedule, lib/scheduling.js), so a resize here would just
+    // get silently overwritten on next load anyway. Bail before starting
+    // the drag at all, same "no drag handle, graceful no-op" treatment the
+    // board's own pinned cards get.
+    if (instance.pinned_position) return;
     e.stopPropagation(); // don't also trigger the block's own onClick (opens EditModal)
     e.preventDefault();
     dragStateRef.current = { startY: e.clientY, currentHeight: baseHeightPx };
@@ -155,6 +162,10 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
   const justDraggedRef = useRef(false);
 
   const onGripPointerDown = (e) => {
+    // Same pinned bail as the resize handle above — a pinned task's
+    // position is re-clamped every load regardless, so whole-block move is
+    // a no-op here too, not just visually locked.
+    if (instance.pinned_position) return;
     e.stopPropagation(); // don't also trigger the block's own onClick (opens EditModal) — same as the resize handle
     e.preventDefault();
     moveDragRef.current = { startY: e.clientY, startScheduledStart: instance.scheduled_start, moved: false, currentProposedStart: null };

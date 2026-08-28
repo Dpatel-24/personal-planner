@@ -75,7 +75,7 @@ export default function FocusModeView({ onExit }) {
   };
 
   return (
-    <div>
+    <div style={{ maxWidth: 480, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space[4] }}>
         <div style={{ fontSize: font.size.xl, fontWeight: font.weight.semibold, color: color.inkV6 }}>
           {formatHeaderDate(logicalToday)}
@@ -89,15 +89,13 @@ export default function FocusModeView({ onExit }) {
       {loading ? (
         <div style={textMuted}>Loading…</div>
       ) : (
-        <div style={{ maxWidth: 480 }}>
-          <DayAgendaRail
-            instances={instances}
-            activeTimer={activeTimer}
-            onToggleStatus={onToggleStatus}
-            onStartTimer={onStartTimer}
-            onStopTimer={onStopTimer}
-          />
-        </div>
+        <DayAgendaRail
+          instances={instances}
+          activeTimer={activeTimer}
+          onToggleStatus={onToggleStatus}
+          onStartTimer={onStartTimer}
+          onStopTimer={onStopTimer}
+        />
       )}
     </div>
   );
