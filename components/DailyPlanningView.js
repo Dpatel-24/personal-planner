@@ -140,6 +140,7 @@ export default function DailyPlanningView({ onClose }) {
   const [carried, setCarried] = useState([]);
   const [scheduled, setScheduled] = useState([]);
   const [newTitle, setNewTitle] = useState('');
+  const [pinnedTomorrow, setPinnedTomorrow] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -153,8 +154,20 @@ export default function DailyPlanningView({ onClose }) {
         fetchInstances({ from: logicalToday, to: logicalToday }),
         fetchInstances({ from: logicalTomorrow, to: logicalTomorrow }),
       ]);
-      setCarried(todayRows.filter((i) => i.status !== 'done').map((instance) => ({ instance, checked: true })));
-      setScheduled(tomorrowRows.map((instance) => ({ instance, checked: true })));
+      // Pinned tasks (Morning Chain/Evening Winddown) don't go through
+      // triage here — they're structurally guaranteed on every day via
+      // their own daily recurrence, not something to carry-over/check off
+      // in this builder. Excluded from both lists (so they're never
+      // draggable/uncheckable here, keeping the "immune to reordering"
+      // guarantee); still always shown in the right-pane preview below,
+      // since they really will be on tomorrow's board regardless.
+      setCarried(
+        todayRows
+          .filter((i) => i.status !== 'done' && !i.pinned_position)
+          .map((instance) => ({ instance, checked: true }))
+      );
+      setScheduled(tomorrowRows.filter((i) => !i.pinned_position).map((instance) => ({ instance, checked: true })));
+      setPinnedTomorrow(tomorrowRows.filter((i) => i.pinned_position));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -212,7 +225,10 @@ export default function DailyPlanningView({ onClose }) {
   // drag-reordered) display order. Read-only, no interaction; DayAgendaRail
   // itself still groups untimed-first/timed-by-time within whatever set it
   // receives.
-  const previewInstances = [...carried, ...scheduled].filter((r) => r.checked).map((r) => r.instance);
+  const previewInstances = [
+    ...pinnedTomorrow,
+    ...[...carried, ...scheduled].filter((r) => r.checked).map((r) => r.instance),
+  ];
 
   return (
     <div style={{ display: 'flex', gap: space[6] }}>

@@ -63,7 +63,18 @@ export default function WeekBoardColumn({
     color: isToday ? color.navy : color.text,
   };
 
-  const itemIds = items.map((i) => i.id);
+  // Pinned tasks (Morning Chain/Evening Winddown) are excluded from the
+  // SortableContext's own items list entirely — the simplest correct fix
+  // per the ask: they render at their fixed top/bottom position OUTSIDE the
+  // reorderable list, so dnd-kit's own collision detection never considers
+  // them a valid drop target and a normal card can never land above/below
+  // them. Only `normal` feeds the SortableContext; card-level drag is also
+  // disabled per-card in WeekBoardCard.js (belt and suspenders — a card
+  // rendered outside its list AND individually non-draggable).
+  const pinnedFirst = items.filter((i) => i.pinned_position === 'first');
+  const normal = items.filter((i) => !i.pinned_position);
+  const pinnedLast = items.filter((i) => i.pinned_position === 'last');
+  const itemIds = normal.map((i) => i.id);
 
   return (
     <div className="week-column" style={columnStyle} data-today={isToday ? 'true' : undefined}>
@@ -78,11 +89,14 @@ export default function WeekBoardColumn({
             the bottom. Placement + style only — createOneOffTask/onCreated
             wiring below is unchanged. */}
         <QuickAddCard scheduledDate={isInbox ? null : columnKey} onCreated={onCreated} />
+        {pinnedFirst.map((i) => (
+          <WeekBoardCard key={i.id} instance={i} columnKey={columnKey} onToggleStatus={onToggleStatus} onEdit={onEdit} />
+        ))}
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
           {items.length === 0 ? (
             <div style={{ ...textMuted, fontSize: font.size.xs, padding: space[1] }}>Nothing here.</div>
           ) : (
-            items.map((i) => (
+            normal.map((i) => (
               <WeekBoardCard
                 key={i.id}
                 instance={i}
@@ -93,6 +107,9 @@ export default function WeekBoardColumn({
             ))
           )}
         </SortableContext>
+        {pinnedLast.map((i) => (
+          <WeekBoardCard key={i.id} instance={i} columnKey={columnKey} onToggleStatus={onToggleStatus} onEdit={onEdit} />
+        ))}
       </div>
     </div>
   );

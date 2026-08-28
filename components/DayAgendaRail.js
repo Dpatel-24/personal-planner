@@ -48,13 +48,20 @@ export default function DayAgendaRail({
     );
   }
 
-  // Untimed group first (top), then timed entries in time order — per the
-  // ask, not interleaved.
-  const untimed = instances.filter((i) => !i.scheduled_start);
-  const timed = [...instances.filter((i) => i.scheduled_start)].sort(
+  // Pinned tasks (Morning Chain/Evening Winddown) sit at the absolute top/
+  // bottom of the rail, overriding the normal untimed/timed ordering below
+  // entirely — a pinned task with a scheduled_start still renders at its
+  // pinned end, not at its time slot. Everything else keeps the existing
+  // untimed-group-first-then-timed-by-time ordering, applied only within
+  // that middle group.
+  const pinnedFirst = instances.filter((i) => i.pinned_position === 'first');
+  const pinnedLast = instances.filter((i) => i.pinned_position === 'last');
+  const rest = instances.filter((i) => !i.pinned_position);
+  const untimed = rest.filter((i) => !i.scheduled_start);
+  const timed = [...rest.filter((i) => i.scheduled_start)].sort(
     (a, b) => new Date(a.scheduled_start) - new Date(b.scheduled_start)
   );
-  const ordered = [...untimed, ...timed];
+  const ordered = [...pinnedFirst, ...untimed, ...timed, ...pinnedLast];
 
   return (
     <div>

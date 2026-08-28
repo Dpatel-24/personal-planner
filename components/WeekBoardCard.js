@@ -43,9 +43,19 @@ export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onE
     : 0;
   const totalTrackedSeconds = (instance.tracked_seconds || 0) + liveSeconds;
 
+  // Pinned tasks (Morning Chain/Evening Winddown) are excluded from the
+  // draggable set entirely — disabled:true is dnd-kit's own supported way
+  // to register a sortable item that can never be picked up (still a valid
+  // hook call every render, just inert), and attributes/listeners are
+  // withheld below so there's no grab cursor/pointer-down handler either.
+  // Per the spec's own recommended simplification: no drag handle, not a
+  // valid drop target, always renders at its fixed position (WeekBoardColumn
+  // renders pinned cards outside the SortableContext's items list).
+  const pinned = !!instance.pinned_position;
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: instance.id,
     data: { columnKey, instance },
+    disabled: pinned,
   });
 
   const toggle = async (e) => {
@@ -77,10 +87,11 @@ export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onE
         ...getTagCardStyle(instance.tag),
         padding: space[3],
         marginBottom: space[2],
-        cursor: 'grab',
+        cursor: pinned ? 'default' : 'grab',
         // Without this, touch-drag on mobile fights the browser's native
         // scroll gesture instead of starting a dnd-kit drag — recommended by
-        // @dnd-kit for any sortable/draggable touch target.
+        // @dnd-kit for any sortable/draggable touch target. Not needed for a
+        // pinned card (no drag to protect from scroll), harmless either way.
         touchAction: 'none',
         transform: CSS.Transform.toString(transform),
         transition,
@@ -88,8 +99,8 @@ export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onE
         // color change — distinct from the transient isDragging/busy dims.
         opacity: isDragging ? 0.4 : busy ? 0.5 : done ? 0.6 : 1,
       }}
-      {...attributes}
-      {...listeners}
+      {...(pinned ? {} : attributes)}
+      {...(pinned ? {} : listeners)}
     >
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: space[2] }}>
         <input
