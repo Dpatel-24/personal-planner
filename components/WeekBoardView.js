@@ -30,6 +30,7 @@ import { useRefresh } from './RefreshContext';
 import WeekBoardColumn from './WeekBoardColumn';
 import WeekSprintBar from './WeekSprintBar';
 import EditModal from './EditModal';
+import FocusModeView from './FocusModeView';
 
 const INBOX_KEY = 'inbox';
 
@@ -61,6 +62,12 @@ export default function WeekBoardView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null);
+  // 'board' | 'focus' | 'planning' — Focus Mode/Daily Planning (Steps 3-5)
+  // toggle a view state on this SAME screen, not a separate route. Owned
+  // here (not lifted to pages/index.js) since the Focus/Daily Planning
+  // buttons live in this component's own week bar and only ever replace
+  // this component's own rendered content.
+  const [mode, setMode] = useState('board');
 
   // The one recurring "Life Formula weekly entry" task routes straight to
   // its own form (pages/life-formula.js) instead of the generic EditModal —
@@ -192,6 +199,10 @@ export default function WeekBoardView() {
 
   const navBtn = { ...buttonSecondary, padding: `${space[1]} ${space[3]}` };
 
+  if (mode === 'focus') {
+    return <FocusModeView onExit={() => setMode('board')} />;
+  }
+
   if (loading) return <div style={textMuted}>Loading…</div>;
 
   const inboxColumn = (
@@ -221,6 +232,13 @@ export default function WeekBoardView() {
           Week of {weekRangeLabel(week)}
         </div>
         <div style={{ display: 'flex', gap: space[1], marginLeft: 'auto' }}>
+          {/* Focus button — left of Prev, per the ask. Toggles `mode` to
+              'focus', which short-circuits this component's render (above)
+              to FocusModeView instead of the week board. Same navBtn style
+              as Prev/This week/Next, no new button style introduced. */}
+          <button style={navBtn} onClick={() => setMode('focus')}>
+            Focus
+          </button>
           <button style={navBtn} onClick={() => shiftWeek(-1)}>
             Prev
           </button>
