@@ -32,30 +32,44 @@ export default function QuickAddCard({ scheduledDate, onCreated }) {
   };
 
   if (!open) {
+    // Standalone bar, not an inline text link — white rounded card/row,
+    // sits above the task list (see WeekBoardColumn.js's render order).
+    // "+" and "Add task" are two separate spans (not one string) so the
+    // icon can stay visually distinct from the label per the spec, both
+    // muted gray, no bold — this is deliberately quiet, not a primary
+    // action button. No time badge: new tasks are untimed/anytime by
+    // default until set elsewhere (the rail's duration stepper).
     return (
       <button
         type="button"
         onClick={() => setOpen(true)}
         style={{
           width: '100%',
+          boxSizing: 'border-box',
+          display: 'flex',
+          alignItems: 'center',
+          gap: space[1],
           textAlign: 'left',
-          padding: `${space[1]} ${space[2]}`,
-          border: 'none',
-          background: 'transparent',
-          color: color.textMuted,
+          padding: `${space[2]} ${space[2]}`,
+          marginBottom: space[2],
+          border: `1px solid ${color.borderSubtle}`,
+          borderRadius: radius.md,
+          background: color.paperV6,
+          color: color.mutedText,
           fontSize: font.size.sm,
+          fontWeight: font.weight.normal,
           fontFamily: font.family,
           cursor: 'pointer',
-          borderRadius: radius.sm,
         }}
       >
-        + Add a task
+        <span aria-hidden="true">+</span>
+        <span>Add task</span>
       </button>
     );
   }
 
   return (
-    <form onSubmit={submit} style={{ marginTop: space[1] }}>
+    <form onSubmit={submit} style={{ marginBottom: space[2] }}>
       <input
         autoFocus
         style={{ ...inputStyle, fontSize: font.size.sm, padding: space[2] }}

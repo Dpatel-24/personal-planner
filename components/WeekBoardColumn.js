@@ -72,6 +72,12 @@ export default function WeekBoardColumn({
         <span style={{ ...textMuted, fontSize: font.size.xs }}>{items.length}</span>
       </div>
       <div ref={setNodeRef} style={{ padding: space[2], minHeight: 48, flex: 1 }}>
+        {/* Moved above the task list per the ask — was rendered after the
+            SortableContext below. Own standalone bar now (see
+            QuickAddCard.js's closed-state styling), not an inline link at
+            the bottom. Placement + style only — createOneOffTask/onCreated
+            wiring below is unchanged. */}
+        <QuickAddCard scheduledDate={isInbox ? null : columnKey} onCreated={onCreated} />
         <SortableContext items={itemIds} strategy={verticalListSortingStrategy}>
           {items.length === 0 ? (
             <div style={{ ...textMuted, fontSize: font.size.xs, padding: space[1] }}>Nothing here.</div>
@@ -87,7 +93,6 @@ export default function WeekBoardColumn({
             ))
           )}
         </SortableContext>
-        <QuickAddCard scheduledDate={isInbox ? null : columnKey} onCreated={onCreated} />
       </div>
     </div>
   );
