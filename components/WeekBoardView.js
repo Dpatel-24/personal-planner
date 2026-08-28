@@ -31,6 +31,7 @@ import WeekBoardColumn from './WeekBoardColumn';
 import WeekSprintBar from './WeekSprintBar';
 import EditModal from './EditModal';
 import FocusModeView from './FocusModeView';
+import DailyPlanningView from './DailyPlanningView';
 
 const INBOX_KEY = 'inbox';
 
@@ -202,6 +203,9 @@ export default function WeekBoardView() {
   if (mode === 'focus') {
     return <FocusModeView onExit={() => setMode('board')} />;
   }
+  if (mode === 'planning') {
+    return <DailyPlanningView onClose={() => setMode('board')} />;
+  }
 
   if (loading) return <div style={textMuted}>Loading…</div>;
 
@@ -232,10 +236,12 @@ export default function WeekBoardView() {
           Week of {weekRangeLabel(week)}
         </div>
         <div style={{ display: 'flex', gap: space[1], marginLeft: 'auto' }}>
-          {/* Focus button — left of Prev, per the ask. Toggles `mode` to
-              'focus', which short-circuits this component's render (above)
-              to FocusModeView instead of the week board. Same navBtn style
-              as Prev/This week/Next, no new button style introduced. */}
+          {/* Daily Planning, then Focus — both left of Prev, in that order,
+              per the ask. Same navBtn style as Prev/This week/Next/Focus,
+              no new button style introduced. */}
+          <button style={navBtn} onClick={() => setMode('planning')}>
+            Daily Planning
+          </button>
           <button style={navBtn} onClick={() => setMode('focus')}>
             Focus
           </button>
