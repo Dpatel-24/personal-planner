@@ -1,30 +1,50 @@
-// DailyPlanningView — Step 5 of the Focus Mode/Daily Planning build.
-// Two-pane screen: left is an editable builder list for logical-tomorrow's
-// board (Carried Over from today + Already on Tomorrow), right is a live,
-// read-only preview via DayAgendaRail (Step 3's component, reused exactly
-// — not rebuilt) reflecting the left pane's checked state in real time.
+// DailyPlanningView — Step 5 of the Focus Mode/Daily Planning build,
+// reworked (2026-08) to fix a reported bug and add real rail editing.
 //
-// All date logic goes through getLogicalToday() (lib/dates.js, Step 2) —
-// no direct `new Date()` today/tomorrow comparisons anywhere in this file.
-// All persistence on Confirm routes through the EXISTING overrideInstance
-// (lib/data.js) — extended in this same step to also accept an optional
-// `position`, rather than adding a new write path. overrideInstance, not
-// moveInstance, specifically because "Already on Tomorrow" can include
-// fresh, non-override recurring instances that moveInstance's own header
-// comment says must not go through it — overrideInstance's is_override:true
-// is what makes touching those safe (protects them from the next
-// generateInstances() regeneration pass). See that function's own comment.
+// Original shape: left builder pane (checkbox + drag-reorder lists) fed a
+// `previewInstances` array into a READ-ONLY DayAgendaRail on the right.
+// Bug: DayAgendaRail re-buckets/re-sorts whatever array it's given (pinned
+// -> untimed -> timed-by-scheduled_start -> pinned), so a drag reorder
+// involving any already-timed item, or a reorder across the Carried/
+// Scheduled section boundary, never showed up in that "preview" even
+// though the underlying state was correctly updating. Not a stale-state
+// bug — a display component silently discarding caller order.
+//
+// Fix + feature ask: replace the read-only preview with the REAL
+// interactive ScheduleRail (components/ScheduleRail.js — the one with
+// drag-to-move/drag-to-resize, used on the board's own sidebar), pointed
+// at tomorrow via its new `dateStr` prop instead of today. This removes
+// the separate "preview order" concept entirely — the right pane always
+// shows exactly what's in the DB, fetched fresh after every write, so
+// there's nothing left to go stale.
+//
+// Data model (confirmed with user, no separate draft/staging table): every
+// interaction here writes directly to the real task_instances rows
+// immediately, same as ScheduleRail's own board-sidebar writes always
+// have. Checking a Carried Over item, dragging it to reorder, or toggling
+// the Already-on-Tomorrow defer checkbox all persist right away via the
+// EXISTING overrideInstance (lib/data.js) — extended in the original Step
+// 5 build to also accept an optional `position`, reused as-is here.
+// overrideInstance, not moveInstance, specifically because both lists can
+// include fresh, non-override recurring instances that moveInstance's own
+// header comment says must not go through it — overrideInstance's
+// is_override:true is what makes touching those safe (protects them from
+// the next generateInstances() regeneration pass). See that function's own
+// comment.
+//
+// All date logic goes through getLogicalToday() (lib/dates.js) — no direct
+// `new Date()` today/tomorrow comparisons anywhere in this file.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { fetchInstances, createOneOffTask, overrideInstance } from '@/lib/data';
+import { fetchInstances, overrideInstance } from '@/lib/data';
 import { getLogicalToday, addDays } from '@/lib/dates';
 import { space, font, color, radius } from '@/lib/tokens';
-import { buttonPrimary, buttonSecondary, buttonGhost, textMuted, input as inputStyle } from '@/lib/components';
+import { buttonPrimary, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
 import { useTimer } from './TimerContext';
-import DayAgendaRail from './DayAgendaRail';
+import ScheduleRail from './ScheduleRail';
 
 function formatHeaderDate(dateStr) {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -55,33 +75,13 @@ function SourceTag({ kind }) {
   );
 }
 
-// One draggable row — checkbox (default checked), title, source tag.
-// Unchecked rows visibly gray out (opacity) so the roll-forward is obvious
-// on this screen, not a later surprise, per the ask.
-function PlanRow({ row, kind, onToggle }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.instance.id });
+// Shared row visuals — checkbox (default checked), title, source tag.
+// Unchecked rows visibly gray out (opacity) so the roll-forward/defer
+// decision is obvious on this screen, not a later surprise.
+function RowBody({ row, kind, onToggle, dragHandle }) {
   return (
-    <div
-      ref={setNodeRef}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: space[2],
-        padding: `${space[2]} ${space[2]}`,
-        borderRadius: radius.sm,
-        opacity: isDragging ? 0.4 : row.checked ? 1 : 0.45,
-        transform: CSS.Transform.toString(transform),
-        transition,
-      }}
-    >
-      <span
-        {...attributes}
-        {...listeners}
-        aria-label="Drag to reorder"
-        style={{ cursor: 'grab', color: color.mutedFaint, fontSize: font.size.sm, flexShrink: 0, touchAction: 'none' }}
-      >
-        ⠿
-      </span>
+    <>
+      {dragHandle}
       <input type="checkbox" checked={row.checked} onChange={() => onToggle(row.instance.id)} style={{ flexShrink: 0 }} />
       <span
         style={{
@@ -97,11 +97,64 @@ function PlanRow({ row, kind, onToggle }) {
         {row.instance.title || '(untitled)'}
       </span>
       <SourceTag kind={kind} />
+    </>
+  );
+}
+
+const rowStyle = (checked, isDragging = false, extra = {}) => ({
+  display: 'flex',
+  alignItems: 'center',
+  gap: space[2],
+  padding: `${space[2]} ${space[2]}`,
+  borderRadius: radius.sm,
+  opacity: isDragging ? 0.4 : checked ? 1 : 0.45,
+  ...extra,
+});
+
+// Drag-sortable row — used by Carried Over, where reorder still drives the
+// position Carried items land in on tomorrow's auto-stacked rail.
+function SortableRow({ row, kind, onToggle }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.instance.id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={rowStyle(row.checked, isDragging, { transform: CSS.Transform.toString(transform), transition })}
+    >
+      <RowBody
+        row={row}
+        kind={kind}
+        onToggle={onToggle}
+        dragHandle={
+          <span
+            {...attributes}
+            {...listeners}
+            aria-label="Drag to reorder"
+            style={{ cursor: 'grab', color: color.mutedFaint, fontSize: font.size.sm, flexShrink: 0, touchAction: 'none' }}
+          >
+            ⠿
+          </span>
+        }
+      />
     </div>
   );
 }
 
-function PlanSection({ title, subtitle, rows, kind, onToggle, onReorder }) {
+// Plain (non-draggable) row — used by Already on Tomorrow, whose own order
+// no longer drives anything now that the right-pane rail positions those
+// tasks by their real scheduled_start. No useSortable/dnd-kit involvement
+// at all here, so this list needs no DndContext/SortableContext ancestor.
+function PlainRow({ row, kind, onToggle }) {
+  return (
+    <div style={rowStyle(row.checked)}>
+      <RowBody row={row} kind={kind} onToggle={onToggle} dragHandle={null} />
+    </div>
+  );
+}
+
+// sortable=true (Carried Over): wraps rows in DndContext/SortableContext so
+// drag-reorder works, and onReorder is required. sortable=false (Already on
+// Tomorrow): plain list, no drag machinery.
+function PlanSection({ title, subtitle, rows, kind, onToggle, onReorder, sortable = true }) {
   const ids = rows.map((r) => r.instance.id);
   const handleDragEnd = (event) => {
     const { active, over } = event;
@@ -119,14 +172,16 @@ function PlanSection({ title, subtitle, rows, kind, onToggle, onReorder }) {
       {subtitle && <div style={{ fontSize: font.size.xs, color: color.mutedText, marginBottom: space[2] }}>{subtitle}</div>}
       {rows.length === 0 ? (
         <div style={{ fontSize: font.size.sm, color: color.mutedText, padding: `${space[1]} ${space[2]}` }}>None.</div>
-      ) : (
+      ) : sortable ? (
         <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={ids} strategy={verticalListSortingStrategy}>
             {rows.map((row) => (
-              <PlanRow key={row.instance.id} row={row} kind={kind} onToggle={onToggle} />
+              <SortableRow key={row.instance.id} row={row} kind={kind} onToggle={onToggle} />
             ))}
           </SortableContext>
         </DndContext>
+      ) : (
+        rows.map((row) => <PlainRow key={row.instance.id} row={row} kind={kind} onToggle={onToggle} />)
       )}
     </div>
   );
@@ -139,13 +194,54 @@ export default function DailyPlanningView({ onClose }) {
 
   const [carried, setCarried] = useState([]);
   const [scheduled, setScheduled] = useState([]);
-  const [newTitle, setNewTitle] = useState('');
-  const [pinnedTomorrow, setPinnedTomorrow] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   const { refresh: globalRefresh } = useRefresh();
   const { refreshTimer } = useTimer();
+
+  // Shared write path for Carried Over: writes the WHOLE list's
+  // scheduledDate + position in one pass. Checked rows get position 0..n in
+  // current list order so ScheduleRail's auto-stack places them on
+  // tomorrow's rail in that same order; unchecked rows get pushed to the
+  // day after tomorrow, no position needed. Slight over-write (unchanged
+  // rows get re-written too) is an accepted tradeoff at this app's
+  // single-user scale, same reasoning already used elsewhere
+  // (lib/board-queries.js) for per-row writes over a real bulk upsert.
+  // globalRefresh() is what makes the right-pane ScheduleRail (subscribed
+  // to the same RefreshContext version everywhere else in the app already
+  // is) pick up the change immediately.
+  //
+  // Called from two places: (1) every toggle/reorder, which is the actual
+  // fix for the reported bug — the "preview" is the same live rail every
+  // other view already trusts, so a reorder shows up the moment it
+  // happens, not a second sort order that could disagree with it; and (2)
+  // Confirm, as a catch-all for whatever's currently in the list even if
+  // the user touched nothing (everything defaults to checked:true — "carry
+  // it all forward" — and with no separate draft table, that default has
+  // to actually get written somewhere, not just displayed). Deliberately
+  // NOT also run once automatically on load: doing so was tried and
+  // reverted — it wrote every row to tomorrow before the user ever saw the
+  // list, which immediately emptied Carried Over into the (non-sortable)
+  // Already-on-Tomorrow section and left nothing left to actually drag.
+  const syncCarried = async (rows) => {
+    setError(null);
+    try {
+      let pos = 0;
+      await Promise.all(
+        rows.map((row) =>
+          overrideInstance(row.instance.id, {
+            scheduledDate: row.checked ? logicalTomorrow : dayAfterTomorrow,
+            ...(row.checked ? { position: pos++ } : {}),
+          })
+        )
+      );
+      globalRefresh();
+      refreshTimer();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
 
   const load = useCallback(async () => {
     setError(null);
@@ -157,17 +253,14 @@ export default function DailyPlanningView({ onClose }) {
       // Pinned tasks (Morning Chain/Evening Winddown) don't go through
       // triage here — they're structurally guaranteed on every day via
       // their own daily recurrence, not something to carry-over/check off
-      // in this builder. Excluded from both lists (so they're never
-      // draggable/uncheckable here, keeping the "immune to reordering"
-      // guarantee); still always shown in the right-pane preview below,
-      // since they really will be on tomorrow's board regardless.
+      // in this builder. Excluded from both lists; the right-pane rail
+      // still shows them (it fetches tomorrow's full set on its own).
       setCarried(
         todayRows
           .filter((i) => i.status !== 'done' && !i.pinned_position)
           .map((instance) => ({ instance, checked: true }))
       );
       setScheduled(tomorrowRows.filter((i) => !i.pinned_position).map((instance) => ({ instance, checked: true })));
-      setPinnedTomorrow(tomorrowRows.filter((i) => i.pinned_position));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -179,56 +272,38 @@ export default function DailyPlanningView({ onClose }) {
     load();
   }, [load]);
 
-  const toggleCarried = (id) =>
-    setCarried((prev) => prev.map((r) => (r.instance.id === id ? { ...r, checked: !r.checked } : r)));
-  const toggleScheduled = (id) =>
-    setScheduled((prev) => prev.map((r) => (r.instance.id === id ? { ...r, checked: !r.checked } : r)));
-
-  const submitAdd = async (e) => {
-    e.preventDefault();
-    const title = newTitle.trim();
-    if (!title) return;
-    setBusy(true);
+  // Already on Tomorrow's own immediate-write toggle — no position/reorder
+  // needed (order here no longer drives the rail's auto-stack the way
+  // Carried Over's does, since these rows already have their own real
+  // scheduled_start once on tomorrow's rail). Unchecking just defers the
+  // task one more day; checking restores it to tomorrow.
+  const toggleScheduled = async (id) => {
+    const row = scheduled.find((r) => r.instance.id === id);
+    if (!row) return;
+    const nextChecked = !row.checked;
+    setScheduled((prev) => prev.map((r) => (r.instance.id === id ? { ...r, checked: nextChecked } : r)));
+    setError(null);
     try {
-      await createOneOffTask({ title, scheduledDate: logicalTomorrow });
-      setNewTitle('');
-      await load();
+      await overrideInstance(id, { scheduledDate: nextChecked ? logicalTomorrow : dayAfterTomorrow });
+      globalRefresh();
+      refreshTimer();
     } catch (e) {
       setError(e.message);
-    } finally {
-      setBusy(false);
     }
   };
 
   const onConfirm = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      let pos = 0;
-      const writes = [];
-      for (const row of [...carried, ...scheduled]) {
-        const fields = { scheduledDate: row.checked ? logicalTomorrow : dayAfterTomorrow };
-        if (row.checked) fields.position = pos++;
-        writes.push(overrideInstance(row.instance.id, fields));
-      }
-      await Promise.all(writes);
-      globalRefresh();
-      refreshTimer();
-      onClose();
-    } catch (e) {
-      setError(e.message);
-      setBusy(false);
-    }
+    setConfirming(true);
+    // Catch-all write for whatever's currently in Carried Over — covers the
+    // case where the user opened this view, left everything at its default
+    // checked:true, and never touched a checkbox or drag (every OTHER
+    // interaction already wrote immediately via syncCarried above, so this
+    // is a no-op re-write for anything already synced, not a second write
+    // path).
+    await syncCarried(carried);
+    setConfirming(false);
+    onClose();
   };
-
-  // Live right-pane preview — checked rows only, in current (possibly
-  // drag-reordered) display order. Read-only, no interaction; DayAgendaRail
-  // itself still groups untimed-first/timed-by-time within whatever set it
-  // receives.
-  const previewInstances = [
-    ...pinnedTomorrow,
-    ...[...carried, ...scheduled].filter((r) => r.checked).map((r) => r.instance),
-  ];
 
   return (
     <div style={{ display: 'flex', gap: space[6] }}>
@@ -242,20 +317,6 @@ export default function DailyPlanningView({ onClose }) {
 
         {error && <div style={{ color: color.danger, marginBottom: space[3], fontSize: font.size.sm }}>{error}</div>}
 
-        <form onSubmit={submitAdd} style={{ display: 'flex', gap: space[2], marginBottom: space[5] }}>
-          <input
-            type="text"
-            placeholder="+ Add task"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            disabled={busy}
-            style={{ ...inputStyle, flex: 1, fontSize: font.size.sm, padding: space[2] }}
-          />
-          <button type="submit" disabled={busy || !newTitle.trim()} style={{ ...buttonSecondary, padding: `${space[1]} ${space[3]}` }}>
-            Add
-          </button>
-        </form>
-
         {loading ? (
           <div style={textMuted}>Loading…</div>
         ) : (
@@ -265,34 +326,41 @@ export default function DailyPlanningView({ onClose }) {
               subtitle="from today"
               rows={carried}
               kind="carried"
-              onToggle={toggleCarried}
-              onReorder={setCarried}
+              onToggle={(id) => {
+                const next = carried.map((r) => (r.instance.id === id ? { ...r, checked: !r.checked } : r));
+                setCarried(next);
+                syncCarried(next);
+              }}
+              onReorder={(next) => {
+                setCarried(next);
+                syncCarried(next);
+              }}
             />
             <PlanSection
               title="Already on Tomorrow"
+              subtitle="uncheck to push to the day after"
               rows={scheduled}
               kind="scheduled"
               onToggle={toggleScheduled}
-              onReorder={setScheduled}
+              sortable={false}
             />
           </>
         )}
 
-        <div style={{ display: 'flex', gap: space[2] }}>
-          <button type="button" disabled={busy || loading} style={buttonPrimary} onClick={onConfirm}>
-            Confirm Tomorrow's Board
-          </button>
-          <button type="button" style={buttonGhost} onClick={onClose}>
-            Cancel
-          </button>
-        </div>
+        {/* Every toggle/reorder above already writes immediately — this is
+            a catch-all for anything left untouched at its default (see
+            onConfirm's own comment), not a batch-commit of pending local
+            state. No separate Cancel: nothing here needs undoing by
+            leaving — navigating away (e.g. the top nav's Calendar tab and
+            back to Board) already unmounts this view and resets Daily
+            Planning mode fresh next time it's opened. */}
+        <button type="button" disabled={loading || confirming} style={buttonPrimary} onClick={onConfirm}>
+          Confirm Tomorrow's Board
+        </button>
       </div>
 
       <div style={{ flex: '1 1 380px', minWidth: 0, borderLeft: `1px solid ${color.borderSubtle}`, paddingLeft: space[6] }}>
-        <div style={{ fontSize: font.size.sm, fontWeight: font.weight.semibold, color: color.inkV6, marginBottom: space[3] }}>
-          Preview — {formatHeaderDate(logicalTomorrow)}
-        </div>
-        <DayAgendaRail instances={previewInstances} readOnly />
+        <ScheduleRail dateStr={logicalTomorrow} headerLabel="Tomorrow" standalone />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
 // ScheduleRail — Schedule Rail V5 (Tier 1 + Tier 2). Fixed-hour vertical
-// grid with today's tasks positioned by scheduled_start/
+// grid with a day's tasks positioned by scheduled_start/
 // estimated_duration_minutes. THE Today UI surface on both platforms — no
 // separate sidebar/list component exists anymore (both were deleted once
 // this fully replaced them):
@@ -11,14 +11,19 @@
 //   `standalone` — the rail owns its own header/add-task form/recurring
 //   button in that mode (see pages/index.js).
 //
-// Independently fetches today's resolved instances via
-// fetchInstancesForDateWithRollover(), subscribed to RefreshContext
-// `version` — same pattern Board/Calendar already use (each fetches its own
-// copy, all refresh() together).
+// `dateStr` (optional, defaults to real today via todayStr()) is what makes
+// this reusable for a day other than today — added for Daily Planning's
+// tomorrow-preview rail (components/DailyPlanningView.js). Real today keeps
+// using fetchInstancesForDateWithRollover (rollover only makes sense for a
+// day that's actually happening); any other date uses fetchPlannedSchedule
+// instead, which skips the rollover merge but still auto-stacks via the same
+// assignTodaySchedule. `headerLabel` (defaults to "Today") is the standalone
+// header's title text, so a non-today rail doesn't lie about which day it is.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import {
   fetchInstancesForDateWithRollover,
+  fetchPlannedSchedule,
   createOneOffTask,
   setInstanceStatus,
   updateEstimatedDuration,
@@ -403,10 +408,21 @@ function minutesFromRailStart(date, railStart) {
   return (date.getTime() - railStart.getTime()) / 60000;
 }
 
-export default function ScheduleRail({ standalone = false }) {
+export default function ScheduleRail({ standalone = false, dateStr, headerLabel = 'Today' }) {
   const router = useRouter();
   const { version, refresh } = useRefresh();
-  const [today] = useState(todayStr);
+  const today = dateStr || todayStr();
+  // Rollover only applies to the app's own built-in "today" rail (no
+  // dateStr passed at all) — NOT decided by comparing the resolved date
+  // string to todayStr(), which briefly gives the wrong answer: between
+  // midnight and 4 AM, getLogicalToday() (lib/dates.js) still treats
+  // "today" as the previous calendar day, so Daily Planning's
+  // logicalTomorrow (= getLogicalToday()+1) is EXACTLY today's real
+  // calendar date during that window. A string-equality check would then
+  // wrongly route Daily Planning's tomorrow rail through the rollover
+  // fetch, pulling in yesterday's still-open carryover onto what's
+  // actually a future-day preview.
+  const isRealToday = dateStr === undefined;
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -434,14 +450,14 @@ export default function ScheduleRail({ standalone = false }) {
   const load = useCallback(async () => {
     setError(null);
     try {
-      setTasks(await fetchInstancesForDateWithRollover(today));
+      setTasks(await (isRealToday ? fetchInstancesForDateWithRollover(today) : fetchPlannedSchedule(today)));
     } catch (e) {
       setError(e.message);
     } finally {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [today, version]);
+  }, [today, isRealToday, version]);
 
   useEffect(() => {
     load();
@@ -587,10 +603,11 @@ export default function ScheduleRail({ standalone = false }) {
   // past 9 PM) — the rail's height grows to fit rather than clipping tasks.
   const railHeight = Math.max(gridHeight, latestEndMinutes * PIXELS_PER_MINUTE);
 
-  // Current-time line position. `today` never changes once set (the rail
-  // has no date navigation — it's always "today"), so `now` only needs
-  // checking against the SAME calendar day `railStart` was built for; no
-  // separate "is now actually today" guard is needed beyond that. Hidden
+  // Current-time line position. Works unchanged for a non-today `dateStr`
+  // too — `now` (the real clock) simply never falls within a future day's
+  // railStart..railHeight window, so showNowLine naturally stays false for
+  // Daily Planning's tomorrow rail without any extra date-equality check.
+  // Hidden
   // outside the rendered grid (before 6 AM or past the bottom of railHeight,
   // e.g. very early morning) rather than clamped to an edge — a line
   // sitting at the top or bottom implying "now" when it isn't there yet/
@@ -601,14 +618,14 @@ export default function ScheduleRail({ standalone = false }) {
   const headerBlock = standalone && (
     <>
       <div style={{ padding: space[4], borderBottom: border.default }}>
-        <h2 style={heading}>Today</h2>
+        <h2 style={heading}>{headerLabel}</h2>
         <div style={{ ...textMuted, marginTop: space[1] }}>{humanDate(today)}</div>
       </div>
       <div style={{ padding: space[4], borderBottom: border.default }}>
         <form onSubmit={add} style={{ display: 'flex', gap: space[2] }}>
           <input
             style={inputStyle}
-            placeholder="Add a task for today"
+            placeholder={isRealToday ? 'Add a task for today' : `Add a task for ${headerLabel.toLowerCase()}`}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
           />
