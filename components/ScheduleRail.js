@@ -28,6 +28,7 @@ import {
   setInstanceStatus,
   updateEstimatedDuration,
   updateScheduledStart,
+  deleteInstance,
 } from '@/lib/data';
 import { cascadeLater } from '@/lib/scheduling';
 import { formatDuration } from '@/lib/timer-queries';
@@ -93,7 +94,7 @@ function formatHourLabel(hour) {
 //   the live preview already used and batches the result to the DB, so
 //   what was previewed is structurally guaranteed to be what persists, not
 //   a second derivation that could drift from it.
-function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurationChange, onMovePreview, onMoveEnd, onMoveCommit }) {
+function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurationChange, onMovePreview, onMoveEnd, onMoveCommit, onDelete }) {
   // Drag math is always computed against the TRUE duration-based height
   // (durationMin * PIXELS_PER_MINUTE), never the display-clamped height —
   // otherwise a short (e.g. 15-min, visually clamped to MIN_BLOCK_HEIGHT)
@@ -250,30 +251,67 @@ function RailBlock({ instance, top, durationMin, onToggleStatus, onEdit, onDurat
           glance). Distinct from the resize handle (bottom 6px strip). Its
           own stopPropagation()/touchAction:'none' means neither the card's
           click-to-edit nor the browser's native touch-scroll ever fights
-          this gesture. */}
-      <div
-        onPointerDown={onGripPointerDown}
-        onPointerMove={onGripPointerMove}
-        onPointerUp={onGripPointerUp}
-        onClick={(e) => e.stopPropagation()}
-        aria-label="Drag to move"
-        title="Drag to move"
-        style={{
-          flexShrink: 0,
-          width: 14,
-          height: 14,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'grab',
-          color: color.textMuted,
-          fontSize: 10,
-          lineHeight: 1,
-          touchAction: 'none', // same reasoning as the resize handle — without this, touch-drag fights the browser's native scroll gesture
-        }}
-      >
-        ≡
-      </div>
+          this gesture.
+          Pinned instances (Morning Chain/Evening Winddown) never drag —
+          onGripPointerDown already bails immediately for them — so this
+          space is otherwise dead weight on a pinned block. Swapped for a
+          delete button there instead: a pinned routine left unchecked
+          rolls over and duplicates itself alongside the next day's own
+          fresh instance (see onDelete's own comment, above), and this is
+          the one place that duplicate is actually visible, so it's the
+          most direct spot to clear it from. */}
+      {instance.pinned_position ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation(); // don't also open EditModal
+            onDelete(instance.id);
+          }}
+          aria-label="Delete this instance"
+          title="Delete this instance"
+          style={{
+            flexShrink: 0,
+            width: 14,
+            height: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+            border: 'none',
+            background: 'none',
+            cursor: 'pointer',
+            color: color.danger,
+            fontSize: 11,
+            lineHeight: 1,
+          }}
+        >
+          ×
+        </button>
+      ) : (
+        <div
+          onPointerDown={onGripPointerDown}
+          onPointerMove={onGripPointerMove}
+          onPointerUp={onGripPointerUp}
+          onClick={(e) => e.stopPropagation()}
+          aria-label="Drag to move"
+          title="Drag to move"
+          style={{
+            flexShrink: 0,
+            width: 14,
+            height: 14,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'grab',
+            color: color.textMuted,
+            fontSize: 10,
+            lineHeight: 1,
+            touchAction: 'none', // same reasoning as the resize handle — without this, touch-drag fights the browser's native scroll gesture
+          }}
+        >
+          ≡
+        </div>
+      )}
       <input
         type="checkbox"
         checked={done}
@@ -474,6 +512,30 @@ export default function ScheduleRail({ standalone = false, dateStr, headerLabel 
   const onToggleStatus = async (id, status) => {
     try {
       await setInstanceStatus(id, status);
+      refresh();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  // Manual delete for a single instance — surfaced on pinned blocks only
+  // (RailBlock, below). Pinned recurring routines (Morning Chain/Evening
+  // Winddown) that go incomplete roll over into the next day's rail
+  // alongside that day's own fresh instance (CLAUDE.md: "rollover is a
+  // computed query, not a mutation" — nothing else auto-resolves this), so
+  // an unchecked routine visually duplicates itself every day it's missed.
+  // deleteInstance (lib/data.js) removes just that one row; safe to do here
+  // specifically because lib/recurrence.js's generateInstances/
+  // expandOccurrences never generates before `today` (windowStart is
+  // clamped to max(template.start_date, today)), so a deleted PAST instance
+  // is never recreated by a later regeneration pass. EditModal's own
+  // Delete button intentionally stays hidden for recurring instances
+  // (isRecurring guard) since deleting an occurrence there isn't scoped to
+  // "the stale rollover copy" the way this one is — this is a narrower,
+  // purpose-built affordance, not a general recurring-instance delete.
+  const onDelete = async (id) => {
+    try {
+      await deleteInstance(id);
       refresh();
     } catch (e) {
       setError(e.message);
@@ -717,6 +779,7 @@ export default function ScheduleRail({ standalone = false, dateStr, headerLabel 
                   onMovePreview={onMovePreview}
                   onMoveEnd={onMoveEnd}
                   onMoveCommit={onMoveCommit}
+                  onDelete={onDelete}
                 />
               );
             })}
