@@ -288,6 +288,30 @@ export default function WeekBoardView() {
               ref={daysScrollRef}
               className="scrollbar-hidden"
               style={{ display: 'flex', gap: space[3], overflowX: 'auto', paddingBottom: space[2] }}
+              // Plain vertical mouse-wheel scroll over this strip pans it
+              // horizontally instead. Mac trackpads already scroll this
+              // natively via a two-finger horizontal swipe, but a Windows
+              // mouse wheel only ever produces vertical deltaY with no
+              // built-in horizontal translation — without this, a
+              // Windows/mouse user has no way to reach Sunday short of a
+              // Shift+wheel gesture nobody would discover on their own
+              // (reported: "unable to see Sunday on a Windows computer").
+              // Only hijacks the wheel when there's a horizontal deltaX
+              // (already-horizontal input, e.g. a trackpad shift-scroll or
+              // a horizontal wheel) isn't already doing the job, and lets
+              // the browser handle its own native vertical page scroll
+              // whenever this strip has nothing further to scroll left/
+              // right — so it never traps an ordinary vertical scroll
+              // gesture over the board.
+              onWheel={(e) => {
+                if (e.deltaX !== 0) return; // already-horizontal input scrolls natively, don't double it
+                const el = e.currentTarget;
+                const atLeftEdge = el.scrollLeft <= 0 && e.deltaY < 0;
+                const atRightEdge = el.scrollLeft + el.clientWidth >= el.scrollWidth && e.deltaY > 0;
+                if (atLeftEdge || atRightEdge) return; // let the page itself scroll vertically past either end
+                e.preventDefault();
+                el.scrollLeft += e.deltaY;
+              }}
             >
               {isMobile && inboxColumn}
               {week.map((d) => {
