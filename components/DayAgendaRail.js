@@ -1,11 +1,16 @@
 // DayAgendaRail — a read/display vertical timeline for one day's tasks.
-// Step 3 of the Focus Mode/Daily Planning build, deliberately built as a
-// standalone, reusable component (not inlined into FocusModeView): Step 5's
-// Daily Planning screen reuses this EXACT component in read-only preview
-// mode with a different data source (tomorrow's tasks) instead of a second,
-// copy-pasted rail. This component never fetches or mutates anything
-// itself — it's handed `instances` (already-resolved task_instances rows,
-// same shape every other view uses) and, when interactive, a small set of
+// Step 3 of the Focus Mode/Daily Planning build, used today by
+// FocusModeView's single-day agenda. (Step 5's Daily Planning screen
+// originally reused this same component as a read-only preview pane too —
+// since replaced there by the real interactive ScheduleRail, pointed at
+// tomorrow via its own `dateStr` prop, specifically because this
+// component's own untimed/timed-by-scheduled_start regrouping below
+// silently discarded a caller's drag-reorder order; see
+// DailyPlanningView.js's own header comment for the full story. Kept here
+// unchanged for Focus Mode, where that regrouping is exactly the wanted
+// behavior.) This component never fetches or mutates anything itself —
+// it's handed `instances` (already-resolved task_instances rows, same
+// shape every other view uses) and, when interactive, a small set of
 // callbacks. All actual persistence (toggle status, start/stop timer)
 // happens in the CALLER via the app's existing lib/data.js / lib/timer-
 // queries.js functions — this file never duplicates that logic.
