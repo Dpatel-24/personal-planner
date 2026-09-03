@@ -200,6 +200,30 @@ export default function WeekBoardView() {
 
   const navBtn = { ...buttonSecondary, padding: `${space[1]} ${space[3]}` };
 
+  // Day-strip scroll-nav (‹ ›), restored: an onWheel vertical-scroll-pans-
+  // horizontally hack was tried instead (to solve "can't see Sunday on a
+  // Windows mouse, no horizontal scrollbar or gesture available"), but it
+  // hijacked a Mac trackpad's own vertical scroll too — a plain two-finger
+  // scroll down the page also panned the day strip sideways whenever the
+  // pointer happened to be over it. Explicit buttons work identically
+  // across every input device with no ambiguity about which gesture means
+  // what, at the cost of a click instead of continuous scroll — the
+  // tradeoff CLAUDE.md's own decisions log already made once before this
+  // strip got its native scroll (removed when WeekSprintBar took this
+  // exact slot); bringing them back here rather than reinstating the
+  // wheel hack. Scroll amount is measured from the actual first rendered
+  // column (offsetWidth) plus the strip's own gap, not a hardcoded
+  // constant — correct at both the desktop (220px) and mobile (85vw)
+  // column widths from styles/globals.css's .week-column media query
+  // without duplicating that breakpoint here.
+  const scrollDays = (direction) => {
+    const container = daysScrollRef.current;
+    const firstColumn = container?.firstElementChild;
+    if (!container || !firstColumn) return;
+    const amount = firstColumn.getBoundingClientRect().width + parseFloat(space[3]);
+    container.scrollBy({ left: direction * amount });
+  };
+
   if (mode === 'focus') {
     return <FocusModeView onExit={() => setMode('board')} />;
   }
@@ -281,37 +305,33 @@ export default function WeekBoardView() {
           {!isMobile && inboxColumn}
 
           <div style={{ flex: 1, minWidth: 0 }}>
-            {/* WeekSprintBar carries its own marginBottom — no extra
-                wrapper spacing needed here. */}
+            {/* Day-strip scroll-nav — top-left, above WeekSprintBar (which
+                still carries its own marginBottom below, no extra spacing
+                needed here). See scrollDays' own comment for why this
+                replaced the onWheel approach. */}
+            <div style={{ display: 'flex', gap: space[1], marginBottom: space[2] }}>
+              <button
+                type="button"
+                style={{ ...navBtn, padding: `${space[1]} ${space[3]}` }}
+                onClick={() => scrollDays(-1)}
+                aria-label="Scroll days earlier"
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                style={{ ...navBtn, padding: `${space[1]} ${space[3]}` }}
+                onClick={() => scrollDays(1)}
+                aria-label="Scroll days later"
+              >
+                ›
+              </button>
+            </div>
             <WeekSprintBar weekStartStr={toDateStr(week[0])} />
             <div
               ref={daysScrollRef}
               className="scrollbar-hidden"
               style={{ display: 'flex', gap: space[3], overflowX: 'auto', paddingBottom: space[2] }}
-              // Plain vertical mouse-wheel scroll over this strip pans it
-              // horizontally instead. Mac trackpads already scroll this
-              // natively via a two-finger horizontal swipe, but a Windows
-              // mouse wheel only ever produces vertical deltaY with no
-              // built-in horizontal translation — without this, a
-              // Windows/mouse user has no way to reach Sunday short of a
-              // Shift+wheel gesture nobody would discover on their own
-              // (reported: "unable to see Sunday on a Windows computer").
-              // Only hijacks the wheel when there's a horizontal deltaX
-              // (already-horizontal input, e.g. a trackpad shift-scroll or
-              // a horizontal wheel) isn't already doing the job, and lets
-              // the browser handle its own native vertical page scroll
-              // whenever this strip has nothing further to scroll left/
-              // right — so it never traps an ordinary vertical scroll
-              // gesture over the board.
-              onWheel={(e) => {
-                if (e.deltaX !== 0) return; // already-horizontal input scrolls natively, don't double it
-                const el = e.currentTarget;
-                const atLeftEdge = el.scrollLeft <= 0 && e.deltaY < 0;
-                const atRightEdge = el.scrollLeft + el.clientWidth >= el.scrollWidth && e.deltaY > 0;
-                if (atLeftEdge || atRightEdge) return; // let the page itself scroll vertically past either end
-                e.preventDefault();
-                el.scrollLeft += e.deltaY;
-              }}
             >
               {isMobile && inboxColumn}
               {week.map((d) => {

@@ -81,10 +81,19 @@ free-text `focus` string. Rendered as `components/WeekSprintBar.js` — a
 small amber-tinted "Sprint:" bar directly above the day-columns scroll strip
 (`WeekBoardView.js`, scoped to that column, not spanning the Inbox column
 too), plain text input, saves on blur (or Enter), no Save button. Sits where
-an explicit ‹ Week › scroll-nav row used to be — removed as redundant once
-this landed, since the day-columns strip already scrolls natively; that's
-the only reason this bar lives exactly there rather than up by the "Week
-of ..." header itself, where it started. Amber (`color.warning`) specifically to look visually distinct from
+an explicit ‹ › day-strip scroll-nav row used to be — originally removed as
+redundant once the strip's own native scroll landed, then brought BACK
+(2026-09) directly above this bar (not replacing it) once native scroll
+turned out to need real buttons after all: a Windows mouse wheel has no
+built-in way to pan a horizontal strip (no visible scrollbar either, see
+`.scrollbar-hidden` in `styles/globals.css`) — reported as "can't see
+Sunday." A wheel-hijack fix (vertical scroll pans the strip horizontally)
+was tried first and reverted just as fast — it also hijacked a Mac
+trackpad's own vertical page scroll the moment the pointer was over the
+strip. Explicit `‹`/`›` buttons (`scrollDays()` in `WeekBoardView.js`,
+scrolling by one measured column width + gap) are unambiguous
+across every input device, so this bar now sits BELOW that row rather than
+in its old slot. Amber (`color.warning`) specifically to look visually distinct from
 the app's usual accent purple used everywhere else, so it reads as its own
 kind of signal. Saved permanently, not just a single overwritten value —
 Prev/Next on the board shows each week's own focus (or the empty
@@ -408,6 +417,13 @@ sidebar/rail) is currently open, not just on the card that started it.
   is meant a sprint focus set on the Board (Mon-Sun) could land on the WRONG
   row once shown on Calendar's grid (previously Sun-Sat) — e.g. a Sunday
   fell in the following row on Calendar but the same week on Board.
+- (2026-09) Board's day-columns strip: tried translating vertical wheel
+  scroll into horizontal pan (to fix "can't see Sunday on Windows, no
+  scrollbar or horizontal-scroll gesture available"), reverted within the
+  same day, replaced with explicit ‹/› scroll-nav buttons instead. Reason:
+  the wheel translation also hijacked a Mac trackpad's own vertical page
+  scroll any time the pointer was over the strip — fixing one input device
+  broke another. Buttons have no such ambiguity on any device.
 
 ## Current state (v5 complete)
 Board, calendar, sidebar, and the Schedule Rail — all four views, full
