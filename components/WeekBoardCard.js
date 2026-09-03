@@ -88,11 +88,21 @@ export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onE
         padding: space[3],
         marginBottom: space[2],
         cursor: pinned ? 'default' : 'grab',
-        // Without this, touch-drag on mobile fights the browser's native
-        // scroll gesture instead of starting a dnd-kit drag — recommended by
-        // @dnd-kit for any sortable/draggable touch target. Not needed for a
-        // pinned card (no drag to protect from scroll), harmless either way.
-        touchAction: 'none',
+        // Dynamic, not static: 'none' only while a drag is ACTUALLY in
+        // progress (isDragging, set by dnd-kit itself once its own
+        // activationConstraint distance is crossed — see
+        // lib/dragAndDrop.js's useDragSensors), so the browser still owns
+        // native scrolling over the card the rest of the time. A static
+        // touch-action:'none' (the previous value here) blocks native
+        // touch scroll on this card unconditionally, drag or not — every
+        // swipe that starts on a card (most of a populated column) has to
+        // go through JS/dnd-kit's own pointer handling with no native
+        // momentum, which is what read as "overly sensitive scroll /
+        // sometimes triggers a drag" on mobile. 'pan-y' (not 'auto') keeps
+        // vertical scroll unambiguous even while dnd-kit's own pointer
+        // listeners are still attached before the activation threshold is
+        // crossed.
+        touchAction: isDragging ? 'none' : 'pan-y',
         transform: CSS.Transform.toString(transform),
         transition,
         // V6: done state is reduced opacity + strikethrough (below), never a

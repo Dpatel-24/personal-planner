@@ -77,6 +77,12 @@ export default function Home() {
                 padding: isMobile ? space[3] : space[6],
                 overflowY: 'auto',
                 overflowX: 'hidden',
+                // Baseline for the mobile scroll/drag-conflict fix (see
+                // WeekBoardCard.js's own touchAction comment for the real
+                // fix) — explicit here too so the browser is never in doubt
+                // about vertical scroll being this container's own gesture,
+                // even before/between any card-level touch-action changes.
+                touchAction: 'pan-y',
               }}
             >
               {tab === 'Board' && <WeekBoardView />}
