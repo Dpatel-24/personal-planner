@@ -21,13 +21,38 @@ import { color, space, radius, font } from '@/lib/tokens';
 import { card as cardStyle } from '@/lib/components';
 import { getTagCardStyle } from '@/lib/tag-styles';
 import { useTimer } from './TimerContext';
+import { useRefresh } from './RefreshContext';
 import { formatDuration } from '@/lib/timer-queries';
+import { toggleChecklistItem } from '@/lib/checklist-queries';
 
 export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onEdit }) {
   const [busy, setBusy] = useState(false);
   const done = instance.status === 'done';
   const { activeTimer } = useTimer();
   const isTiming = activeTimer?.instance_id === instance.id;
+  const { refresh } = useRefresh();
+
+  // Checklist breakdown shown directly on the card (2026-09 ask: "I should
+  // not have to click on the card to see the breakdown") — toggling an item
+  // here writes immediately via the SAME toggleChecklistItem
+  // (lib/checklist-queries.js) EditModal's own ChecklistSection already
+  // uses, not a second write path, then refresh()es like every other board
+  // write. stopPropagation on both the row and its pointerdown, same
+  // pattern the status checkbox below already establishes, so tapping an
+  // item never also opens EditModal (the card's own onClick) or gets
+  // captured by dnd-kit's drag sensor.
+  const toggleItem = async (e, item) => {
+    e.stopPropagation();
+    try {
+      await toggleChecklistItem(item.id, !item.is_done);
+      refresh();
+    } catch {
+      // Swallowed deliberately: a failed checklist toggle isn't worth a
+      // card-level error banner (this card has none to show it in) — the
+      // next refresh already reconciles to whatever's really in the DB,
+      // same failure handling EditModal's own ChecklistSection relies on.
+    }
+  };
 
   // Re-render every second while THIS card's timer is the active one, so the
   // live portion of the total keeps ticking without a re-fetch.
@@ -165,8 +190,43 @@ export default function WeekBoardCard({ instance, columnKey, onToggleStatus, onE
             </div>
           )}
           {instance.checklist_total > 0 && (
-            <div style={{ fontSize: font.size.xs, color: color.textMuted, marginTop: space[1] }}>
-              {instance.checklist_done}/{instance.checklist_total}
+            <div style={{ marginTop: space[1] }}>
+              <div style={{ fontSize: font.size.xs, color: color.textMuted }}>
+                {instance.checklist_done}/{instance.checklist_total}
+              </div>
+              <div style={{ marginTop: 2 }}>
+                {instance.checklist_items.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={(e) => toggleItem(e, item)}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'flex-start',
+                      gap: space[1],
+                      padding: `1px 0`,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={item.is_done}
+                      readOnly
+                      style={{ marginTop: 2, flexShrink: 0, width: 11, height: 11 }}
+                    />
+                    <span
+                      style={{
+                        fontSize: font.size.xs,
+                        color: item.is_done ? color.textSubtle : color.textMuted,
+                        textDecoration: item.is_done ? 'line-through' : 'none',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {item.text}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
           {totalTrackedSeconds > 0 && (
