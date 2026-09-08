@@ -17,9 +17,19 @@ import GoalGraph from '@/components/GoalGraph';
 import TagManagerModal from '@/components/TagManagerModal';
 import PillTabs from '@/components/PillTabs';
 
-const TREE_LABELS = ['Short-Term', 'Long-Term', 'Completed'];
-const TREE_CATEGORIES = ['short_term', 'long_term']; // index-matched to TREE_LABELS[0..1] only — Completed (index 2) isn't category-scoped
-const COMPLETED_TAB = 2;
+// Tenure definitions (2026-09, explicit ask): Short-Term 1-6 months,
+// Medium-Term 6 months-2 years, Long-Term 2-5 years. TREE_RANGES is
+// index-matched to TREE_LABELS[0..2]/TREE_CATEGORIES, surfaced both as the
+// page's own legend line (replacing the old generic "left-to-right view of
+// what's actually moving" subtitle) and inline on each tab, so the tenure
+// meaning is visible wherever the tabs themselves are, not just once at the
+// top. 'medium_term' is a real new category value — goals.category's own
+// CHECK constraint was migrated (goals_allow_medium_term_category) to allow
+// it alongside the existing short_term/long_term.
+const TREE_LABELS = ['Short-Term', 'Medium-Term', 'Long-Term', 'Completed'];
+const TREE_RANGES = ['1–6 months', '6 months–2 years', '2–5 years'];
+const TREE_CATEGORIES = ['short_term', 'medium_term', 'long_term']; // index-matched to TREE_LABELS[0..2] only — Completed (index 3) isn't category-scoped
+const COMPLETED_TAB = 3;
 
 // Reshapes the flat `goals` list (as returned by listGoals(), each row
 // already carrying effective_category) into the nested {id, title, done,
@@ -248,19 +258,27 @@ export default function GoalsPage() {
         <AppNav current="goals" onManageTags={() => setManagingTags(true)} />
 
         <section style={{ flex: 1, minHeight: 0, padding: space[6], overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {/* Replaces the old generic "A left-to-right view of what's
+              actually moving" subtitle — explicit ask: showcase what each
+              tenure actually means instead of a vague description of the
+              layout. Same TREE_RANGES also echoed per-tab just below, so
+              the definition is visible wherever you're actually looking,
+              not just once up here. */}
           <div style={{ fontSize: font.size.sm, color: color.muted, marginBottom: space[4], flexShrink: 0 }}>
-            A left-to-right view of what's actually moving.
+            {TREE_LABELS.slice(0, 3).map((label, i) => `${label}: ${TREE_RANGES[i]}`).join('   ·   ')}
           </div>
 
           {loading && <div style={textMuted}>Loading…</div>}
           {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}
 
-          {/* Completed sits in its own row, above the Short-Term/Long-Term +
-              "+ Add Root Goal" row below — per the explicit ask, not folded
-              into the same row as that button. Styled distinctly (outline
-              pill, not the filled Short-Term/Long-Term style) so it doesn't
-              read as a third peer category, just a separate archive view. */}
-          <div style={{ marginBottom: space[2], flexShrink: 0 }}>
+          {/* Completed sits in its own row, ABOVE the Short/Medium/Long +
+              "+ Add Root Goal" row below (per the explicit ask — that
+              vertical order stays), now right-aligned instead of left —
+              per the ask to shift it to the right side of the page. Styled
+              distinctly (outline pill, not the filled tab style) so it
+              doesn't read as a fourth peer category, just a separate
+              archive view. */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: space[2], flexShrink: 0 }}>
             <button
               type="button"
               onClick={() => setActiveTree(COMPLETED_TAB)}
@@ -279,10 +297,10 @@ export default function GoalsPage() {
             </button>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space[4], flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space[1], flexShrink: 0 }}>
             <PillTabs
-              options={TREE_LABELS.slice(0, 2)}
-              activeIndex={activeTree < 2 ? activeTree : -1}
+              options={TREE_LABELS.slice(0, 3)}
+              activeIndex={activeTree < 3 ? activeTree : -1}
               onChange={setActiveTree}
             />
             {/* Scoped to whichever tab is active — inserts a root with THAT
@@ -294,6 +312,13 @@ export default function GoalsPage() {
                 + Add Root Goal
               </button>
             )}
+          </div>
+
+          {/* Active tab's own tenure range, echoed right under the tabs
+              themselves (not just once in the page's own legend above) —
+              blank on Completed, which isn't a tenure. */}
+          <div style={{ fontSize: font.size.xs, color: color.mutedFaint, marginBottom: space[4], flexShrink: 0, minHeight: '1em' }}>
+            {activeTree !== COMPLETED_TAB ? TREE_RANGES[activeTree] : ''}
           </div>
 
           {/* Left-to-right graph layout, now backed by the real `goals`
