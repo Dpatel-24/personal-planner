@@ -16,17 +16,14 @@
 // heading instead of a 6th "at a glance" card, so the exact 5-card layout
 // is honored without losing the stat entirely.
 import Head from 'next/head';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { getAllLifeFormulaEntries, computeDashboardStats, computeMonthlySummary } from '@/lib/lifeFormulaStats';
+import { STATE_COLOR } from '@/lib/lifeFormula';
 import { color, space, radius, font } from '@/lib/tokens';
 import AppNav from '@/components/AppNav';
 import TagManagerModal from '@/components/TagManagerModal';
-
-const STATE_COLOR = {
-  Momentum: color.stateMomentum,
-  Stability: color.stateStability,
-  Friction: color.stateFriction,
-};
+import { buttonGhost } from '@/lib/components';
 
 const sectionLabelStyle = {
   fontSize: font.size.xs,
@@ -231,8 +228,17 @@ export default function DashboardPage() {
         <AppNav current="dashboard" onManageTags={() => setManagingTags(true)} />
 
         <section style={{ flex: 1, minHeight: 0, padding: space[6], overflowY: 'auto', background: color.paperV6 }}>
-          <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.ink, marginBottom: space[4] }}>
-            Life Formula — Dashboard
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space[4] }}>
+            <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.ink }}>
+              Life Formula — Dashboard
+            </div>
+            {/* Log view: every logged week, editable, simple list format —
+                the answer to "can I see/fix a past week's numbers", which
+                nothing on this page (charts, this-run-only stats) already
+                covers. */}
+            <Link href="/life-formula-log" style={{ ...buttonGhost, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm, textDecoration: 'none' }}>
+              View Log
+            </Link>
           </div>
 
           {error && <div style={{ color: color.danger, marginBottom: space[3] }}>{error}</div>}

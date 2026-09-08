@@ -19,152 +19,21 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useState } from 'react';
 import { createLifeFormulaEntry } from '@/lib/lifeFormulaStats';
-import { calculateLifeFormula } from '@/lib/lifeFormula';
+import { calculateLifeFormula, LIFE_FORMULA_ZONES, LIFE_FORMULA_KEYS } from '@/lib/lifeFormula';
 import { isoWeekLabel } from '@/lib/dates';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { buttonGhost, textMuted } from '@/lib/components';
+import { Zone } from '@/components/LifeFormulaZones';
 
-// Same 9 metrics as before, grouped into the three zones the spec calls for.
-// Values start unanswered (null), not pre-filled — the spec's "disable
-// submit until all 9 fields are answered" only means something if a field
-// can actually be in an unanswered state.
-const ZONES = [
-  {
-    eyebrow: 'NUMERATOR — COHERENCE',
-    bg: color.coherenceBg,
-    text: color.coherenceText,
-    metrics: [
-      ['vision', 'Vision'],
-      ['systems', 'Systems'],
-      ['resilience', 'Resilience'],
-      ['persistence', 'Persistence'],
-      ['lessons_integrated', 'Lessons Integrated'],
-    ],
-  },
-  {
-    eyebrow: 'DENOMINATOR — RESISTANCE',
-    bg: color.resistanceBg,
-    text: color.resistanceText,
-    metrics: [
-      ['financial_friction', 'Financial Friction'],
-      ['emotional_turbulence', 'Emotional Turbulence'],
-      ['coordination_friction', 'Coordination Friction'],
-    ],
-  },
-  {
-    eyebrow: 'MULTIPLIER — EXECUTION',
-    bg: color.executionBg,
-    text: color.executionText,
-    metrics: [['execution', 'Execution']],
-  },
-];
-
-const ALL_KEYS = ZONES.flatMap((z) => z.metrics.map(([key]) => key));
+// Zone/metric grouping now lives in lib/lifeFormula.js (LIFE_FORMULA_ZONES)
+// so the Log's edit view (pages/life-formula-log.js) renders the exact same
+// grouping for an existing entry instead of a second, driftable copy — see
+// that file's own comment. Values start unanswered (null), not pre-filled —
+// the spec's "disable submit until all 9 fields are answered" only means
+// something if a field can actually be in an unanswered state.
+const ZONES = LIFE_FORMULA_ZONES;
+const ALL_KEYS = LIFE_FORMULA_KEYS;
 const DEFAULT_VALUES = Object.fromEntries(ALL_KEYS.map((key) => [key, null]));
-
-// One field row: label left (12.5px medium, ink), 1-5 button-group right.
-// Selecting a button writes that field's value immediately — no separate
-// confirm step, same as the mechanism this replaces.
-function FieldRow({ label, value, onChange, zoneText }) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: space[2],
-        padding: `${space[1]} 0`,
-      }}
-    >
-      <div style={{ fontSize: '12.5px', fontWeight: font.weight.medium, color: color.ink, fontFamily: font.family }}>
-        {label}
-      </div>
-      <div style={{ display: 'flex', gap: space[1] }}>
-        {[1, 2, 3, 4, 5].map((n) => {
-          const selected = value === n;
-          return (
-            <button
-              key={n}
-              type="button"
-              onClick={() => onChange(n)}
-              aria-label={`${label}: ${n}`}
-              aria-pressed={selected}
-              style={{
-                width: 22,
-                height: 22,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: 0,
-                borderRadius: radius.sm,
-                border: 'none',
-                background: selected ? zoneText : color.lifeFormulaButtonBg,
-                color: selected ? color.white : color.muted,
-                fontFamily: font.family,
-                fontSize: '10.5px',
-                fontWeight: font.weight.bold,
-                cursor: 'pointer',
-              }}
-            >
-              {n}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// Eyebrow pill — uppercase, letter-spaced, small bold, zone bg/text, fully
-// rounded. Sits above (not inside) the zone's own white card.
-function Eyebrow({ label, bg, text }) {
-  return (
-    <div
-      style={{
-        display: 'inline-block',
-        background: bg,
-        color: text,
-        padding: `3px ${space[2]}`,
-        borderRadius: radius.full,
-        fontSize: '10px',
-        fontWeight: font.weight.bold,
-        fontFamily: font.family,
-        textTransform: 'uppercase',
-        letterSpacing: '0.06em',
-        marginBottom: space[2],
-      }}
-    >
-      {label}
-    </div>
-  );
-}
-
-// Zone: eyebrow pill + white card (1px lifeFormulaBorder, 8px radius, 12px
-// padding) containing that zone's field rows, divided by hairlines.
-function Zone({ eyebrow, bg, text, metrics, values, onChange }) {
-  return (
-    <div style={{ marginBottom: space[4] }}>
-      <Eyebrow label={eyebrow} bg={bg} text={text} />
-      <div
-        style={{
-          background: color.card,
-          border: `1px solid ${color.lifeFormulaBorder}`,
-          borderRadius: radius.lg,
-          padding: space[3],
-        }}
-      >
-        {metrics.map(([key, label], i) => (
-          <div
-            key={key}
-            style={i < metrics.length - 1 ? { borderBottom: `1px solid ${color.lifeFormulaBorder}` } : undefined}
-          >
-            <FieldRow label={label} value={values[key]} onChange={(n) => onChange(key, n)} zoneText={text} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export default function LifeFormulaPage() {
   const router = useRouter();
