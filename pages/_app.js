@@ -18,7 +18,22 @@ const inter = Inter({
 
 export default function App({ Component, pageProps }) {
   return (
-    <div className={inter.variable}>
+    <div
+      className={inter.variable}
+      // Safe-area padding (2026-09, "make app launch standalone on iOS"):
+      // apple-mobile-web-app-status-bar-style is "black-translucent"
+      // (pages/_document.js), which lets content render UNDER the iPhone
+      // notch/status bar in standalone PWA mode — env() resolves to 0 in
+      // every other context (desktop, a plain Safari tab, Android), so
+      // this is a no-op everywhere except actually-installed iOS, where
+      // it's exactly what keeps each page's own top nav/header clear of
+      // the notch. Lives here (the one wrapper every page already renders
+      // inside) rather than in all 7 individual page files, and needs
+      // viewport-fit=cover in each page's own <meta name="viewport"> to
+      // actually resolve to a nonzero value per the CSS env() spec — see
+      // that meta tag's own updated content.
+      style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+    >
       <Component {...pageProps} />
     </div>
   );

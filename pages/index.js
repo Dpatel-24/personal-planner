@@ -43,7 +43,7 @@ export default function Home() {
       <TimerProvider>
         <Head>
           <title>Planner</title>
-          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
           <link rel="icon" href="/favicon.ico" />
         </Head>
         <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
