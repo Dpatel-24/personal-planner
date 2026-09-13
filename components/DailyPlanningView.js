@@ -38,7 +38,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { fetchInstances, overrideInstance } from '@/lib/data';
+import { fetchInstances, fetchTodayAndRollover, overrideInstance } from '@/lib/data';
 import { getLogicalToday, addDays } from '@/lib/dates';
 import { space, font, color, radius } from '@/lib/tokens';
 import { buttonPrimary, textMuted } from '@/lib/components';
@@ -246,8 +246,20 @@ export default function DailyPlanningView({ onClose }) {
   const load = useCallback(async () => {
     setError(null);
     try {
+      // Carried Over must mean the SAME thing this word means everywhere
+      // else in the app (the Board's own "carried over" red badge, the
+      // rail's rollover merge): today's own incomplete instances UNION
+      // every still-incomplete instance from an EARLIER day, not just
+      // "scheduled_date literally equals today." fetchInstances({from:
+      // logicalToday, to: logicalToday}) — the previous fetch here — only
+      // ever matched the first half of that; a task overdue from any prior
+      // day never had a scheduled_date of today at all, so it silently
+      // never appeared here regardless of how overdue it was. Switched to
+      // fetchTodayAndRollover (lib/data.js), the exact same rollover query
+      // the Board/ScheduleRail already use, so "Carried Over" now actually
+      // shows every carried-over task, not just the ones landing on today.
       const [todayRows, tomorrowRows] = await Promise.all([
-        fetchInstances({ from: logicalToday, to: logicalToday }),
+        fetchTodayAndRollover(logicalToday),
         fetchInstances({ from: logicalTomorrow, to: logicalTomorrow }),
       ]);
       // Pinned tasks (Morning Chain/Evening Winddown) don't go through
