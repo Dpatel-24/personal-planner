@@ -1,19 +1,13 @@
-// pages/books.js — Books tracker: a spreadsheet-style table over three
-// statuses (Want to Read / Reading / Finished). Fully independent feature
-// (own `books` table, own query module) — no shared data or
-// cross-references with Goals/Life Formula/the task planner/the Life tab,
-// per the ask. No sidebar, same "top-level route, header + content only"
-// pattern as pages/goals.js, pages/life-formula.js, pages/life.js.
-//
-// TABLE VIEW (2026-10): previously a single list behind a three-way tab
-// switcher (one status visible at a time, PillTabs). Replaced with all
-// three statuses shown together as three side-by-side columns — the ask
-// was "I don't want to toggle through individual pages... I want to see it
-// all at the same time, kind of like a table structure." One shared query
-// (getAllBooks) replaces the per-tab getBooksByStatus fetch; books are
-// grouped into their three arrays client-side after the single fetch.
+// pages/books.js — Books tracker: three status columns (Want to Read /
+// Reading / Finished) shown side by side. Cards are draggable between
+// columns, the same way Board cards are — a drop is the only way a book's
+// status changes, and it stamps/clears the matching date for you. Clicking a
+// card opens an edit modal (title, author, dates, rating, note, delete).
+// Fully independent feature (own `books` table, own query module) — no shared
+// data with the rest of the app.
 import Head from 'next/head';
 import { useEffect, useMemo, useState } from 'react';
+import { DndContext, DragOverlay, useDraggable, useDroppable } from '@dnd-kit/core';
 import {
   getAllBooks,
   createBook,
@@ -21,20 +15,19 @@ import {
   finishBook,
   revertToWantToRead,
   revertToReading,
-  updateBookField,
+  updateBook,
   deleteBook,
 } from '@/lib/book-queries';
+import { useDragSensors } from '@/lib/dragAndDrop';
+import { useIsMobile } from '@/lib/useIsMobile';
 import { space, font, radius } from '@/lib/tokens';
-import { buttonGhost } from '@/lib/components';
+import { buttonGhost, buttonPrimary, buttonSecondary, input as inputStyle } from '@/lib/components';
 import AppNav from '@/components/AppNav';
+import Modal from '@/components/Modal';
 
-// Palette locked to exactly these values (existing tokens + the two star
-// colors the spec adds specifically for this page) — no other color
-// appears anywhere here.
 const NAVY = '#1F3A5F';
 const INK = '#1C1C1E';
 const MUTED = '#999999';
-const MUTED2 = '#B0AFA9';
 const BORDER = '#ECECEE';
 const DIVIDER = '#F4F4F4';
 const STAR_EMPTY = '#E0DFDA';
@@ -42,10 +35,8 @@ const STAR_EMPTY = '#E0DFDA';
 const STATUSES = ['want_to_read', 'reading', 'finished'];
 const STATUS_LABELS = ['Want to Read', 'Reading', 'Finished'];
 
-// Local copy, not imported from lib/dates.js or lib/day-logs-queries.js —
-// same file-level independence reasoning lib/day-logs-queries.js's own
-// toDateStr documents: this feature shares nothing, not even a trivial
-// helper, with the rest of the app.
+// Local copy, not imported from lib/dates.js — this feature shares nothing,
+// not even a trivial helper, with the rest of the app.
 function toDateStr(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -53,58 +44,133 @@ function toDateStr(d) {
   return `${y}-${m}-${day}`;
 }
 
-// 'YYYY-MM-DD' -> 'Aug 25, 2026'. Parsed as a local date (no UTC shift),
-// same reasoning as lib/dates.js's own humanDate().
-function formatDate(dateStr) {
-  if (!dateStr) return '';
-  const [y, m, d] = dateStr.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+// Moves a book between statuses using the matching transition query, so the
+// date stamped (or cleared) on each move comes from one place, not the UI.
+async function moveBookTo(book, target) {
+  const today = toDateStr(new Date());
+  const from = book.status;
+  if (from === 'want_to_read' && target === 'reading') return startReading(book.id, today);
+  if (from === 'reading' && target === 'finished') return finishBook(book.id, today);
+  if (from === 'reading' && target === 'want_to_read') return revertToWantToRead(book.id);
+  if (from === 'finished' && target === 'reading') return revertToReading(book.id);
+  if (from === 'want_to_read' && target === 'finished') {
+    await startReading(book.id, today);
+    return finishBook(book.id, today);
+  }
+  if (from === 'finished' && target === 'want_to_read') {
+    await revertToReading(book.id);
+    return revertToWantToRead(book.id);
+  }
 }
 
-// Click-to-edit date cell — shows the formatted date as plain text; a click
-// swaps it for a native date input, which saves on change (no separate save
-// step) and swaps back to display mode.
-function EditableDate({ value, onSave }) {
-  const [editing, setEditing] = useState(false);
-  if (editing) {
-    return (
-      <input
-        type="date"
-        autoFocus
-        defaultValue={value || ''}
-        onChange={(e) => {
-          if (e.target.value) onSave(e.target.value);
-          setEditing(false);
-        }}
-        onBlur={() => setEditing(false)}
-        style={{
-          fontSize: font.size.xs,
-          fontFamily: font.family,
-          color: INK,
-          border: `1px solid ${BORDER}`,
-          borderRadius: radius.sm,
-          padding: `2px ${space[1]}`,
-        }}
-      />
-    );
-  }
+function BookCard({ book, onOpen, onDelete, isOverlay = false }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: book.id });
   return (
-    <span
-      onClick={() => setEditing(true)}
-      style={{ fontSize: font.size.xs, color: INK, cursor: 'pointer' }}
-      title="Click to change date"
+    <div
+      ref={isOverlay ? undefined : setNodeRef}
+      {...(isOverlay ? {} : listeners)}
+      {...(isOverlay ? {} : attributes)}
+      onClick={isOverlay ? undefined : () => onOpen(book)}
+      style={{
+        position: 'relative',
+        background: '#FFFFFF',
+        border: `1px solid ${BORDER}`,
+        borderRadius: radius.sm,
+        padding: `${space[2]} ${space[6]} ${space[2]} ${space[3]}`,
+        cursor: isOverlay ? 'grabbing' : 'grab',
+        opacity: isDragging ? 0.4 : 1,
+        touchAction: isDragging ? 'none' : 'pan-y',
+        userSelect: 'none',
+        boxShadow: isOverlay ? '0 4px 12px rgba(0,0,0,0.12)' : 'none',
+      }}
     >
-      {value ? formatDate(value) : '—'}
-    </span>
+      <div
+        style={{
+          fontSize: font.size.sm,
+          fontWeight: font.weight.semibold,
+          color: INK,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {book.title}
+      </div>
+      {book.author && (
+        <div style={{ fontSize: font.size.xs, color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {book.author}
+        </div>
+      )}
+      {!isOverlay && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(book.id);
+          }}
+          aria-label={`Delete ${book.title}`}
+          title="Delete"
+          style={{
+            position: 'absolute',
+            top: space[1],
+            right: space[1],
+            background: 'none',
+            border: 'none',
+            color: MUTED,
+            fontSize: font.size.md,
+            lineHeight: 1,
+            padding: `0 ${space[1]}`,
+            cursor: 'pointer',
+          }}
+        >
+          ×
+        </button>
+      )}
+    </div>
   );
 }
 
-// Five tappable stars — click sets rating to that star's number; clicking
-// the currently-selected star again clears it back to null. No half-stars,
-// no hover preview beyond the native button hover, per the ask's scope.
+function BookColumn({ status, label, books, onOpen, onDelete }) {
+  const { setNodeRef, isOver } = useDroppable({ id: status });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        flex: 1,
+        minWidth: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        border: `1px solid ${BORDER}`,
+        borderRadius: radius.md,
+        overflow: 'hidden',
+        background: isOver ? DIVIDER : '#FFFFFF',
+        transition: 'background 120ms ease',
+      }}
+    >
+      <div style={{ padding: `${space[2]} ${space[3]}`, background: DIVIDER, display: 'flex', alignItems: 'baseline', gap: space[1], flexShrink: 0 }}>
+        <span style={{ fontSize: font.size.sm, fontWeight: font.weight.bold, color: INK }}>{label}</span>
+        <span style={{ fontSize: font.size.xs, color: MUTED }}>{books.length}</span>
+      </div>
+
+      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: space[2], display: 'flex', flexDirection: 'column', gap: space[2] }}>
+        {books.length === 0 && (
+          <div style={{ textAlign: 'center', color: MUTED, fontSize: font.size.xs, padding: `${space[6]} ${space[2]}` }}>
+            Nothing here.
+          </div>
+        )}
+        {books.map((book) => (
+          <BookCard key={book.id} book={book} onOpen={onOpen} onDelete={onDelete} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Five tappable stars — clicking the currently-selected star clears it.
 function StarRating({ value, onChange }) {
   return (
-    <div style={{ display: 'flex', gap: 1 }}>
+    <div style={{ display: 'flex', gap: 2 }}>
       {[1, 2, 3, 4, 5].map((n) => (
         <button
           key={n}
@@ -116,7 +182,7 @@ function StarRating({ value, onChange }) {
             border: 'none',
             padding: 0,
             cursor: 'pointer',
-            fontSize: font.size.sm,
+            fontSize: font.size.lg,
             lineHeight: 1,
             color: value !== null && n <= value ? NAVY : STAR_EMPTY,
           }}
@@ -128,290 +194,127 @@ function StarRating({ value, onChange }) {
   );
 }
 
-// Click-to-edit note cell — shows the note, or a muted "— no note —"
-// placeholder when empty; a click swaps either for a text input that saves
-// on blur or Enter. An empty save reverts to the placeholder rather than
-// storing an empty string.
-function EditableNote({ value, onSave }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value || '');
+function BookEditModal({ book, onSave, onDelete, onClose }) {
+  const [title, setTitle] = useState(book.title);
+  const [author, setAuthor] = useState(book.author || '');
+  const [startedAt, setStartedAt] = useState(book.started_at || '');
+  const [finishedAt, setFinishedAt] = useState(book.finished_at || '');
+  const [rating, setRating] = useState(book.rating);
+  const [note, setNote] = useState(book.note || '');
 
-  const commit = () => {
-    setEditing(false);
-    const trimmed = draft.trim();
-    if (trimmed !== (value || '')) onSave(trimmed || null);
+  const fieldLabel = { fontSize: font.size.xs, color: MUTED, marginBottom: space[1], display: 'block' };
+
+  const submit = (e) => {
+    e.preventDefault();
+    const t = title.trim();
+    if (!t) return;
+    onSave(book.id, {
+      title: t,
+      author: author.trim() || null,
+      started_at: startedAt || null,
+      finished_at: finishedAt || null,
+      rating,
+      note: note.trim() || null,
+    });
   };
 
-  if (editing) {
-    return (
-      <input
-        type="text"
-        autoFocus
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onBlur={commit}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault();
-            commit();
-          } else if (e.key === 'Escape') {
-            setDraft(value || '');
-            setEditing(false);
-          }
-        }}
-        style={{
-          width: '100%',
-          boxSizing: 'border-box',
-          fontSize: font.size.xs,
-          fontFamily: font.family,
-          color: INK,
-          border: `1px solid ${BORDER}`,
-          borderRadius: radius.sm,
-          padding: `2px ${space[1]}`,
-        }}
-      />
-    );
-  }
   return (
-    <span
-      onClick={() => {
-        setDraft(value || '');
-        setEditing(true);
-      }}
-      style={{ fontSize: font.size.xs, color: value ? INK : MUTED, fontStyle: value ? 'normal' : 'italic', cursor: 'pointer' }}
-    >
-      {value || '— no note —'}
-    </span>
-  );
-}
-
-function TitleAuthorCell({ title, author }) {
-  return (
-    <div style={{ minWidth: 0 }}>
-      <div
-        style={{
-          fontSize: font.size.sm,
-          fontWeight: font.weight.semibold,
-          color: INK,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}
-        title={title}
-      >
-        {title}
-      </div>
-      {author && (
-        <div
-          style={{ fontSize: font.size.xs, color: MUTED, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-          title={author}
-        >
-          {author}
+    <Modal onClose={onClose} width={420}>
+      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: space[3] }}>
+        <div>
+          <label style={fieldLabel}>Title</label>
+          <input style={inputStyle} value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
         </div>
-      )}
-    </div>
-  );
-}
-
-// One column of the table — its own header (status label + count), its own
-// rows, its own row shape (what extra fields show below title/author
-// depends on status, same per-status shape the old tab view used). All
-// three columns render from the SAME books array (filtered by status here),
-// so a status transition (Start Reading / Finish) just moves a row from one
-// column's filtered slice to another's on the next render — no column owns
-// its own fetch.
-function BookColumn({ status, label, books, onStartReading, onFinish, onRevert, onEditField, onDelete }) {
-  return (
-    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', border: `1px solid ${BORDER}`, borderRadius: radius.md, overflow: 'hidden' }}>
-      <div
-        style={{
-          padding: `${space[2]} ${space[3]}`,
-          background: DIVIDER,
-          display: 'flex',
-          alignItems: 'baseline',
-          gap: space[1],
-          flexShrink: 0,
-        }}
-      >
-        <span style={{ fontSize: font.size.sm, fontWeight: font.weight.bold, color: INK }}>{label}</span>
-        <span style={{ fontSize: font.size.xs, color: MUTED }}>{books.length}</span>
-      </div>
-
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-        {books.length === 0 && (
-          <div style={{ textAlign: 'center', color: MUTED, fontSize: font.size.xs, padding: `${space[6]} ${space[2]}` }}>
-            Nothing here.
+        <div>
+          <label style={fieldLabel}>Author</label>
+          <input style={inputStyle} value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="Optional" />
+        </div>
+        <div style={{ display: 'flex', gap: space[2] }}>
+          <div style={{ flex: 1 }}>
+            <label style={fieldLabel}>Started</label>
+            <input type="date" style={inputStyle} value={startedAt} onChange={(e) => setStartedAt(e.target.value)} />
           </div>
-        )}
-        {books.map((book, i) => (
-          <div
-            key={book.id}
-            style={{
-              padding: `${space[2]} ${space[3]}`,
-              borderTop: i === 0 ? 'none' : `1px solid ${DIVIDER}`,
-              display: 'flex',
-              flexDirection: 'column',
-              gap: space[1],
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: space[2] }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <TitleAuthorCell title={book.title} author={book.author} />
-              </div>
-              {/* Every status gets the same two controls on the right: a
-                  forward/back status button (Start, or Finish + Revert, or
-                  just Revert for Finished) plus a delete ("x") — delete used
-                  to only exist on the Finished column, which left no way to
-                  remove a book added to Want to Read by mistake, and no way
-                  to undo an accidental Start/Finish click short of deleting
-                  and re-adding it. */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: space[1], flexShrink: 0 }}>
-                {status === 'want_to_read' && (
-                  <button
-                    type="button"
-                    onClick={() => onStartReading(book.id)}
-                    style={{
-                      background: NAVY,
-                      color: '#FFFFFF',
-                      border: 'none',
-                      borderRadius: radius.sm,
-                      padding: `2px ${space[2]}`,
-                      fontSize: font.size.xs,
-                      fontWeight: font.weight.medium,
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Start
-                  </button>
-                )}
-                {status === 'reading' && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => onRevert(book.id)}
-                      title="Move back to Want to Read"
-                      style={{
-                        background: 'none',
-                        color: MUTED,
-                        border: `1px solid ${BORDER}`,
-                        borderRadius: radius.sm,
-                        padding: `2px ${space[2]}`,
-                        fontSize: font.size.xs,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      ← Want to Read
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onFinish(book.id)}
-                      style={{
-                        background: NAVY,
-                        color: '#FFFFFF',
-                        border: 'none',
-                        borderRadius: radius.sm,
-                        padding: `2px ${space[2]}`,
-                        fontSize: font.size.xs,
-                        fontWeight: font.weight.medium,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      Finish
-                    </button>
-                  </>
-                )}
-                {status === 'finished' && (
-                  <button
-                    type="button"
-                    onClick={() => onRevert(book.id)}
-                    title="Move back to Reading"
-                    style={{
-                      background: 'none',
-                      color: MUTED,
-                      border: `1px solid ${BORDER}`,
-                      borderRadius: radius.sm,
-                      padding: `2px ${space[2]}`,
-                      fontSize: font.size.xs,
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    ← Reading
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => onDelete(book.id)}
-                  aria-label={`Delete ${book.title}`}
-                  title="Delete"
-                  style={{ background: 'none', border: 'none', color: MUTED, fontSize: font.size.sm, cursor: 'pointer', padding: 0, lineHeight: 1 }}
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-
-            {status === 'reading' && (
-              <div style={{ display: 'flex', gap: space[1], alignItems: 'baseline', fontSize: font.size.xs, color: MUTED2 }}>
-                Started <EditableDate value={book.started_at} onSave={(v) => onEditField(book.id, 'started_at', v)} />
-              </div>
-            )}
-
-            {status === 'finished' && (
-              <>
-                <div style={{ display: 'flex', gap: space[1], alignItems: 'baseline', fontSize: font.size.xs, color: MUTED2 }}>
-                  Finished <EditableDate value={book.finished_at} onSave={(v) => onEditField(book.id, 'finished_at', v)} />
-                </div>
-                <StarRating value={book.rating} onChange={(v) => onEditField(book.id, 'rating', v)} />
-                <EditableNote value={book.note} onSave={(v) => onEditField(book.id, 'note', v)} />
-              </>
-            )}
+          <div style={{ flex: 1 }}>
+            <label style={fieldLabel}>Finished</label>
+            <input type="date" style={inputStyle} value={finishedAt} onChange={(e) => setFinishedAt(e.target.value)} />
           </div>
-        ))}
-      </div>
-    </div>
+        </div>
+        <div>
+          <label style={fieldLabel}>Rating</label>
+          <StarRating value={rating} onChange={setRating} />
+        </div>
+        <div>
+          <label style={fieldLabel}>Note</label>
+          <textarea style={{ ...inputStyle, minHeight: 64, resize: 'vertical' }} value={note} onChange={(e) => setNote(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: space[2] }}>
+          <button type="button" onClick={() => onDelete(book.id)} style={{ ...buttonSecondary, color: '#B93232' }}>
+            Delete
+          </button>
+          <div style={{ display: 'flex', gap: space[2] }}>
+            <button type="button" onClick={onClose} style={buttonSecondary}>
+              Cancel
+            </button>
+            <button type="submit" disabled={!title.trim()} style={buttonPrimary}>
+              Save
+            </button>
+          </div>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
 export default function BooksPage() {
+  const isMobile = useIsMobile();
+  const sensors = useDragSensors(isMobile);
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [activeId, setActiveId] = useState(null);
+  const [editingId, setEditingId] = useState(null);
 
   const [adding, setAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newAuthor, setNewAuthor] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const load = useMemo(
-    () => () => {
-      setLoading(true);
-      setError(null);
-      return getAllBooks()
-        .then(setBooks)
-        .catch((e) => setError(e.message))
-        .finally(() => setLoading(false));
-    },
-    []
-  );
+  // Background refetch never flips `loading`, so the columns (and the
+  // DndContext wrapping them) stay mounted through every drop/save.
+  const refresh = () =>
+    getAllBooks()
+      .then(setBooks)
+      .catch((e) => setError(e.message));
 
   useEffect(() => {
-    load();
-  }, [load]);
+    refresh().finally(() => setLoading(false));
+  }, []);
 
   const byStatus = useMemo(() => {
     const grouped = { want_to_read: [], reading: [], finished: [] };
-    for (const b of books) {
-      (grouped[b.status] ?? grouped.want_to_read).push(b);
-    }
+    for (const b of books) (grouped[b.status] ?? grouped.want_to_read).push(b);
     return grouped;
   }, [books]);
 
   const patchLocal = (id, fields) => {
     setBooks((prev) => prev.map((b) => (b.id === id ? { ...b, ...fields } : b)));
+  };
+
+  const activeBook = activeId ? books.find((b) => b.id === activeId) : null;
+  const editingBook = editingId ? books.find((b) => b.id === editingId) : null;
+
+  const handleDragEnd = async ({ active, over }) => {
+    setActiveId(null);
+    if (!over) return;
+    const book = books.find((b) => b.id === active.id);
+    if (!book || book.status === over.id) return;
+    try {
+      await moveBookTo(book, over.id);
+      await refresh();
+    } catch (e) {
+      setError(e.message);
+      await refresh();
+    }
   };
 
   const submitAdd = async (e) => {
@@ -424,7 +327,7 @@ export default function BooksPage() {
       setNewTitle('');
       setNewAuthor('');
       setAdding(false);
-      await load();
+      await refresh();
     } catch (e) {
       setError(e.message);
     } finally {
@@ -432,64 +335,21 @@ export default function BooksPage() {
     }
   };
 
-  const onStartReading = async (id) => {
-    patchLocal(id, { status: 'reading', started_at: toDateStr(new Date()) });
+  const onSave = async (id, fields) => {
+    setEditingId(null);
+    patchLocal(id, fields);
     try {
-      await startReading(id, toDateStr(new Date()));
+      await updateBook(id, fields);
+      await refresh();
     } catch (e) {
       setError(e.message);
-      await load();
-    }
-  };
-
-  const onFinish = async (id) => {
-    patchLocal(id, { status: 'finished', finished_at: toDateStr(new Date()) });
-    try {
-      await finishBook(id, toDateStr(new Date()));
-    } catch (e) {
-      setError(e.message);
-      await load();
-    }
-  };
-
-  // Single revert handler for both directions — which one applies depends
-  // on the book's CURRENT status (looked up from state, not passed in by
-  // the caller), since BookColumn only ever renders the one revert button
-  // that's valid for the column it's in.
-  const onRevert = async (id) => {
-    const book = books.find((b) => b.id === id);
-    if (!book) return;
-    if (book.status === 'reading') {
-      patchLocal(id, { status: 'want_to_read', started_at: null });
-      try {
-        await revertToWantToRead(id);
-      } catch (e) {
-        setError(e.message);
-        await load();
-      }
-    } else if (book.status === 'finished') {
-      patchLocal(id, { status: 'reading', finished_at: null });
-      try {
-        await revertToReading(id);
-      } catch (e) {
-        setError(e.message);
-        await load();
-      }
-    }
-  };
-
-  const onEditField = async (id, field, value) => {
-    patchLocal(id, { [field]: value });
-    try {
-      await updateBookField(id, field, value);
-    } catch (e) {
-      setError(e.message);
-      await load(); // revert to real state on failure
+      await refresh();
     }
   };
 
   const onDelete = async (id) => {
     if (!confirm('Delete this book?')) return;
+    setEditingId(null);
     try {
       await deleteBook(id);
       setBooks((prev) => prev.filter((b) => b.id !== id));
@@ -509,125 +369,80 @@ export default function BooksPage() {
         <AppNav current="books" />
 
         <section style={{ flex: 1, minHeight: 0, padding: space[6], display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-          {/* Capped width, centered — the three columns previously stretched
-              edge-to-edge with the page, which read as too wide/sparse on a
-              normal desktop window. 900px comfortably fits three columns at
-              their own natural widths without forcing them as wide as a
-              full ultrawide/maximized browser window. */}
           <div style={{ width: '100%', maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space[4], flexShrink: 0 }}>
-            <div style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: INK, fontFamily: font.family }}>
-              Books
-            </div>
-            <button
-              type="button"
-              onClick={() => setAdding((a) => !a)}
-              style={{
-                ...buttonGhost,
-                border: `1px solid ${NAVY}`,
-                color: NAVY,
-                padding: `${space[1]} ${space[3]}`,
-                fontSize: font.size.sm,
-              }}
-            >
-              + Add Book
-            </button>
-          </div>
-
-          {error && <div style={{ color: '#B93232', marginBottom: space[3], fontSize: font.size.sm, flexShrink: 0 }}>{error}</div>}
-
-          {adding && (
-            <form
-              onSubmit={submitAdd}
-              style={{
-                display: 'flex',
-                gap: space[2],
-                alignItems: 'center',
-                marginBottom: space[3],
-                padding: space[2],
-                border: `1px solid ${BORDER}`,
-                borderRadius: radius.md,
-                flexShrink: 0,
-              }}
-            >
-              <input
-                type="text"
-                placeholder="Title"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                autoFocus
-                style={{
-                  flex: 2,
-                  fontSize: font.size.sm,
-                  fontFamily: font.family,
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: radius.sm,
-                  padding: `${space[1]} ${space[2]}`,
-                }}
-              />
-              <input
-                type="text"
-                placeholder="Author (optional)"
-                value={newAuthor}
-                onChange={(e) => setNewAuthor(e.target.value)}
-                style={{
-                  flex: 1,
-                  fontSize: font.size.sm,
-                  fontFamily: font.family,
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: radius.sm,
-                  padding: `${space[1]} ${space[2]}`,
-                }}
-              />
-              <button
-                type="submit"
-                disabled={busy || !newTitle.trim()}
-                style={{
-                  background: NAVY,
-                  color: '#FFFFFF',
-                  border: 'none',
-                  borderRadius: radius.sm,
-                  padding: `${space[1]} ${space[3]}`,
-                  fontSize: font.size.sm,
-                  fontWeight: font.weight.medium,
-                  cursor: busy || !newTitle.trim() ? 'default' : 'pointer',
-                  opacity: busy || !newTitle.trim() ? 0.5 : 1,
-                }}
-              >
-                Add
-              </button>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space[4], flexShrink: 0 }}>
+              <div style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: INK, fontFamily: font.family }}>Books</div>
               <button
                 type="button"
-                onClick={() => setAdding(false)}
-                style={{ background: 'none', border: 'none', color: MUTED, fontSize: font.size.sm, cursor: 'pointer' }}
+                onClick={() => setAdding((a) => !a)}
+                style={{ ...buttonGhost, border: `1px solid ${NAVY}`, color: NAVY, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm }}
               >
-                Cancel
+                + Add Book
               </button>
-            </form>
-          )}
-
-          {loading && <div style={{ color: MUTED, fontSize: font.size.sm }}>Loading…</div>}
-
-          {!loading && (
-            <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: space[4], overflowX: 'auto' }}>
-              {STATUSES.map((status, i) => (
-                <BookColumn
-                  key={status}
-                  status={status}
-                  label={STATUS_LABELS[i]}
-                  books={byStatus[status]}
-                  onStartReading={onStartReading}
-                  onFinish={onFinish}
-                  onRevert={onRevert}
-                  onEditField={onEditField}
-                  onDelete={onDelete}
-                />
-              ))}
             </div>
-          )}
+
+            {error && <div style={{ color: '#B93232', marginBottom: space[3], fontSize: font.size.sm, flexShrink: 0 }}>{error}</div>}
+
+            {adding && (
+              <form
+                onSubmit={submitAdd}
+                style={{ display: 'flex', gap: space[2], alignItems: 'center', marginBottom: space[3], padding: space[2], border: `1px solid ${BORDER}`, borderRadius: radius.md, flexShrink: 0 }}
+              >
+                <input
+                  type="text"
+                  placeholder="Title"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  autoFocus
+                  style={{ ...inputStyle, flex: 2, width: 'auto', fontSize: font.size.sm, padding: `${space[1]} ${space[2]}` }}
+                />
+                <input
+                  type="text"
+                  placeholder="Author (optional)"
+                  value={newAuthor}
+                  onChange={(e) => setNewAuthor(e.target.value)}
+                  style={{ ...inputStyle, flex: 1, width: 'auto', fontSize: font.size.sm, padding: `${space[1]} ${space[2]}` }}
+                />
+                <button type="submit" disabled={busy || !newTitle.trim()} style={{ ...buttonPrimary, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm }}>
+                  Add
+                </button>
+                <button type="button" onClick={() => setAdding(false)} style={{ ...buttonSecondary, padding: `${space[1]} ${space[3]}`, fontSize: font.size.sm }}>
+                  Cancel
+                </button>
+              </form>
+            )}
+
+            {loading && <div style={{ color: MUTED, fontSize: font.size.sm }}>Loading…</div>}
+
+            {!loading && (
+              <DndContext
+                sensors={sensors}
+                onDragStart={({ active }) => setActiveId(active.id)}
+                onDragEnd={handleDragEnd}
+                onDragCancel={() => setActiveId(null)}
+              >
+                <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: space[4], overflowX: 'auto' }}>
+                  {STATUSES.map((status, i) => (
+                    <BookColumn
+                      key={status}
+                      status={status}
+                      label={STATUS_LABELS[i]}
+                      books={byStatus[status]}
+                      onOpen={(book) => setEditingId(book.id)}
+                      onDelete={onDelete}
+                    />
+                  ))}
+                </div>
+                <DragOverlay>{activeBook ? <BookCard book={activeBook} onOpen={() => {}} onDelete={() => {}} isOverlay /> : null}</DragOverlay>
+              </DndContext>
+            )}
           </div>
         </section>
       </div>
+
+      {editingBook && (
+        <BookEditModal book={editingBook} onSave={onSave} onDelete={onDelete} onClose={() => setEditingId(null)} />
+      )}
     </>
   );
 }
