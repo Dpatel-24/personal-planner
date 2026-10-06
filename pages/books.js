@@ -438,6 +438,12 @@ export default function BooksPage() {
         <AppNav current="books" />
 
         <section style={{ flex: 1, minHeight: 0, padding: space[6], display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {/* Capped width, centered — the three columns previously stretched
+              edge-to-edge with the page, which read as too wide/sparse on a
+              normal desktop window. 900px comfortably fits three columns at
+              their own natural widths without forcing them as wide as a
+              full ultrawide/maximized browser window. */}
+          <div style={{ width: '100%', maxWidth: 900, margin: '0 auto', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0, overflow: 'hidden' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: space[4], flexShrink: 0 }}>
             <div style={{ fontSize: font.size.xl, fontWeight: font.weight.bold, color: INK, fontFamily: font.family }}>
               Books
@@ -547,6 +553,7 @@ export default function BooksPage() {
               ))}
             </div>
           )}
+          </div>
         </section>
       </div>
     </>
