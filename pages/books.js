@@ -19,6 +19,8 @@ import {
   createBook,
   startReading,
   finishBook,
+  revertToWantToRead,
+  revertToReading,
   updateBookField,
   deleteBook,
 } from '@/lib/book-queries';
@@ -218,7 +220,7 @@ function TitleAuthorCell({ title, author }) {
 // so a status transition (Start Reading / Finish) just moves a row from one
 // column's filtered slice to another's on the next render — no column owns
 // its own fetch.
-function BookColumn({ status, label, books, onStartReading, onFinish, onEditField, onDelete }) {
+function BookColumn({ status, label, books, onStartReading, onFinish, onRevert, onEditField, onDelete }) {
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', border: `1px solid ${BORDER}`, borderRadius: radius.md, overflow: 'hidden' }}>
       <div
@@ -256,57 +258,100 @@ function BookColumn({ status, label, books, onStartReading, onFinish, onEditFiel
               <div style={{ flex: 1, minWidth: 0 }}>
                 <TitleAuthorCell title={book.title} author={book.author} />
               </div>
-              {status === 'want_to_read' && (
-                <button
-                  type="button"
-                  onClick={() => onStartReading(book.id)}
-                  style={{
-                    background: NAVY,
-                    color: '#FFFFFF',
-                    border: 'none',
-                    borderRadius: radius.sm,
-                    padding: `2px ${space[2]}`,
-                    fontSize: font.size.xs,
-                    fontWeight: font.weight.medium,
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  Start
-                </button>
-              )}
-              {status === 'reading' && (
-                <button
-                  type="button"
-                  onClick={() => onFinish(book.id)}
-                  style={{
-                    background: NAVY,
-                    color: '#FFFFFF',
-                    border: 'none',
-                    borderRadius: radius.sm,
-                    padding: `2px ${space[2]}`,
-                    fontSize: font.size.xs,
-                    fontWeight: font.weight.medium,
-                    cursor: 'pointer',
-                    flexShrink: 0,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  Finish
-                </button>
-              )}
-              {status === 'finished' && (
+              {/* Every status gets the same two controls on the right: a
+                  forward/back status button (Start, or Finish + Revert, or
+                  just Revert for Finished) plus a delete ("x") — delete used
+                  to only exist on the Finished column, which left no way to
+                  remove a book added to Want to Read by mistake, and no way
+                  to undo an accidental Start/Finish click short of deleting
+                  and re-adding it. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: space[1], flexShrink: 0 }}>
+                {status === 'want_to_read' && (
+                  <button
+                    type="button"
+                    onClick={() => onStartReading(book.id)}
+                    style={{
+                      background: NAVY,
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: radius.sm,
+                      padding: `2px ${space[2]}`,
+                      fontSize: font.size.xs,
+                      fontWeight: font.weight.medium,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Start
+                  </button>
+                )}
+                {status === 'reading' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => onRevert(book.id)}
+                      title="Move back to Want to Read"
+                      style={{
+                        background: 'none',
+                        color: MUTED,
+                        border: `1px solid ${BORDER}`,
+                        borderRadius: radius.sm,
+                        padding: `2px ${space[2]}`,
+                        fontSize: font.size.xs,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      ← Want to Read
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onFinish(book.id)}
+                      style={{
+                        background: NAVY,
+                        color: '#FFFFFF',
+                        border: 'none',
+                        borderRadius: radius.sm,
+                        padding: `2px ${space[2]}`,
+                        fontSize: font.size.xs,
+                        fontWeight: font.weight.medium,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      Finish
+                    </button>
+                  </>
+                )}
+                {status === 'finished' && (
+                  <button
+                    type="button"
+                    onClick={() => onRevert(book.id)}
+                    title="Move back to Reading"
+                    style={{
+                      background: 'none',
+                      color: MUTED,
+                      border: `1px solid ${BORDER}`,
+                      borderRadius: radius.sm,
+                      padding: `2px ${space[2]}`,
+                      fontSize: font.size.xs,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    ← Reading
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onDelete(book.id)}
                   aria-label={`Delete ${book.title}`}
                   title="Delete"
-                  style={{ background: 'none', border: 'none', color: MUTED, fontSize: font.size.sm, cursor: 'pointer', padding: 0, flexShrink: 0 }}
+                  style={{ background: 'none', border: 'none', color: MUTED, fontSize: font.size.sm, cursor: 'pointer', padding: 0, lineHeight: 1 }}
                 >
-                  …
+                  ×
                 </button>
-              )}
+              </div>
             </div>
 
             {status === 'reading' && (
@@ -404,6 +449,32 @@ export default function BooksPage() {
     } catch (e) {
       setError(e.message);
       await load();
+    }
+  };
+
+  // Single revert handler for both directions — which one applies depends
+  // on the book's CURRENT status (looked up from state, not passed in by
+  // the caller), since BookColumn only ever renders the one revert button
+  // that's valid for the column it's in.
+  const onRevert = async (id) => {
+    const book = books.find((b) => b.id === id);
+    if (!book) return;
+    if (book.status === 'reading') {
+      patchLocal(id, { status: 'want_to_read', started_at: null });
+      try {
+        await revertToWantToRead(id);
+      } catch (e) {
+        setError(e.message);
+        await load();
+      }
+    } else if (book.status === 'finished') {
+      patchLocal(id, { status: 'reading', finished_at: null });
+      try {
+        await revertToReading(id);
+      } catch (e) {
+        setError(e.message);
+        await load();
+      }
     }
   };
 
@@ -547,6 +618,7 @@ export default function BooksPage() {
                   books={byStatus[status]}
                   onStartReading={onStartReading}
                   onFinish={onFinish}
+                  onRevert={onRevert}
                   onEditField={onEditField}
                   onDelete={onDelete}
                 />
