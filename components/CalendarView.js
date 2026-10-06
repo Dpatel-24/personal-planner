@@ -10,7 +10,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
-import { fetchInstances, setInstanceStatus } from '@/lib/data';
+import { fetchInstances, setInstanceStatus, createOneOffTask } from '@/lib/data';
 import { getTags } from '@/lib/tag-queries';
 import { getWeekSprintsInRange } from '@/lib/sprint-queries';
 import { todayStr, addDays } from '@/lib/dates';
@@ -19,7 +19,7 @@ import { useIsMobile } from '@/lib/useIsMobile';
 import { getTagCardStyle } from '@/lib/tag-styles';
 import { isLifeFormulaEntryTask } from '@/lib/lifeFormulaLink';
 import { color, space, radius, border, font, elevation } from '@/lib/tokens';
-import { buttonSecondary, textMuted } from '@/lib/components';
+import { buttonSecondary, buttonPrimary, input as inputStyle } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
 import CalendarDayCell from './CalendarDayCell';
 import EditModal from './EditModal';
@@ -63,6 +63,37 @@ export default function CalendarView({ onManageTags }) {
   const [itemsByDate, setItemsByDate] = useState({});
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null);
+  // Click-to-add: clicking a day's date number opens an inline add-task box
+  // for that date, right under the number — no per-cell "+" button cluttering
+  // every day. addingFor is the date string currently showing its box (only
+  // one open at a time); addTitle/addBusy are that box's own form state.
+  const [addingFor, setAddingFor] = useState(null);
+  const [addTitle, setAddTitle] = useState('');
+  const [addBusy, setAddBusy] = useState(false);
+
+  const openAdd = (day) => {
+    setAddingFor(day);
+    setAddTitle('');
+  };
+  const closeAdd = () => {
+    setAddingFor(null);
+    setAddTitle('');
+  };
+  const submitAdd = async (e, day) => {
+    e.preventDefault();
+    const t = addTitle.trim();
+    if (!t) return;
+    setAddBusy(true);
+    try {
+      await createOneOffTask({ title: t, scheduledDate: day });
+      closeAdd();
+      refresh();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setAddBusy(false);
+    }
+  };
 
   // Same special-case routing as WeekBoardView — see lib/lifeFormulaLink.js.
   const handleEdit = (instance) => {
@@ -306,6 +337,8 @@ export default function CalendarView({ onManageTags }) {
                           }}
                         >
                           <span
+                            onClick={() => (addingFor === day ? closeAdd() : openAdd(day))}
+                            title="Add a task on this date"
                             style={{
                               display: 'inline-block',
                               minWidth: 20,
@@ -316,10 +349,47 @@ export default function CalendarView({ onManageTags }) {
                               background: isToday ? color.navy : 'transparent',
                               borderRadius: radius.full,
                               padding: `0 ${space[1]}`,
+                              cursor: 'pointer',
                             }}
                           >
                             {dayNum}
                           </span>
+
+                          {addingFor === day && (
+                            <form
+                              onSubmit={(e) => submitAdd(e, day)}
+                              style={{ marginTop: space[1] }}
+                            >
+                              <input
+                                autoFocus
+                                style={{ ...inputStyle, fontSize: font.size.xs, padding: space[1], width: '100%', boxSizing: 'border-box' }}
+                                placeholder="Task title"
+                                value={addTitle}
+                                onChange={(e) => setAddTitle(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Escape') closeAdd();
+                                }}
+                                disabled={addBusy}
+                              />
+                              <div style={{ display: 'flex', gap: space[1], marginTop: 2 }}>
+                                <button
+                                  type="submit"
+                                  disabled={addBusy}
+                                  style={{ ...buttonPrimary, padding: `1px ${space[1]}`, fontSize: font.size.xs }}
+                                >
+                                  Add
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={closeAdd}
+                                  disabled={addBusy}
+                                  style={{ ...buttonSecondary, padding: `1px ${space[1]}`, fontSize: font.size.xs }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </form>
+                          )}
                         </div>
                       );
                     })}
