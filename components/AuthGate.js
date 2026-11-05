@@ -21,6 +21,7 @@ import {
   markSignedIn,
   signedInTooLong,
   clearDeviceState,
+  recordSignOut,
   MAX_PIN_FAILS,
 } from '@/lib/pinLock';
 import { LoginScreen, LockScreen, PinSetupScreen } from './AuthScreens';
@@ -36,11 +37,20 @@ export default function AuthGate({ children }) {
   const lockedRef = useRef(false);
   lockedRef.current = locked;
 
-  const signOut = useCallback(async () => {
+  // Set while WE are signing out, so the SIGNED_OUT event handler below can
+  // tell an intentional sign-out from the session dying on its own.
+  const signingOutRef = useRef(false);
+
+  // scope 'local': only THIS device is signed out. The default ('global')
+  // would revoke every other trusted device's session too.
+  const signOut = useCallback(async (reason = 'manual') => {
+    signingOutRef.current = true;
     clearDeviceState();
+    recordSignOut(reason);
     setLocked(false);
     setSettingPin(false);
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
+    signingOutRef.current = false;
   }, []);
 
   useEffect(() => {
@@ -49,7 +59,7 @@ export default function AuthGate({ children }) {
       if (cancelled) return;
       const s = data.session;
       if (s && signedInTooLong()) {
-        signOut();
+        signOut('session_too_old');
         setSession(null);
         return;
       }
@@ -63,7 +73,12 @@ export default function AuthGate({ children }) {
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       setSession(s ?? null);
       if (event === 'SIGNED_IN' && s && !hasPin() && !pinPromptSkipped()) setSettingPin(true);
-      if (event === 'SIGNED_OUT') clearDeviceState();
+      if (event === 'SIGNED_OUT' && !signingOutRef.current) {
+        // Not initiated here: the session ended on its own (refresh failed,
+        // revoked elsewhere, storage cleared in another tab).
+        clearDeviceState();
+        recordSignOut('session_ended_unexpectedly');
+      }
     });
     return () => {
       cancelled = true;
@@ -102,7 +117,7 @@ export default function AuthGate({ children }) {
         touchActive();
         setLocked(false);
       } else if (result.remaining <= 0) {
-        await signOut();
+        await signOut('too_many_wrong_pins');
       }
       return result;
     },
@@ -144,7 +159,7 @@ export default function AuthGate({ children }) {
           }}
         />
       )}
-      {locked && !settingPin && <LockScreen onVerify={verify} onSignOut={signOut} />}
+      {locked && !settingPin && <LockScreen onVerify={verify} />}
     </AuthContext.Provider>
   );
 }

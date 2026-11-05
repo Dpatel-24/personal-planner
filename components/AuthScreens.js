@@ -4,7 +4,7 @@
 // lives in AuthGate.
 import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
-import { markSignedIn } from '@/lib/pinLock';
+import { markSignedIn, readSignOutNote, clearSignOutNote } from '@/lib/pinLock';
 import { color, space, radius, font } from '@/lib/tokens';
 import { input as inputStyle, buttonPrimary, buttonGhost } from '@/lib/components';
 
@@ -32,6 +32,13 @@ const titleStyle = { fontSize: font.size.xl, fontWeight: font.weight.bold, color
 const subtitleStyle = { fontSize: font.size.sm, color: color.mutedText, fontFamily: font.family };
 const errorStyle = { fontSize: font.size.sm, color: color.danger, fontFamily: font.family };
 
+const SIGN_OUT_REASONS = {
+  manual: 'you signed out',
+  too_many_wrong_pins: 'too many wrong PINs',
+  session_too_old: 'session reached its 1-year limit',
+  session_ended_unexpectedly: 'the session ended on its own',
+};
+
 export function ScreenShell({ children }) {
   return (
     <div style={screenStyle}>
@@ -51,9 +58,11 @@ export function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
+  const [lastSignOut, setLastSignOut] = useState(null);
 
   useEffect(() => {
     setAllowSignup(new URLSearchParams(window.location.search).get('signup') === '1');
+    setLastSignOut(readSignOutNote());
   }, []);
 
   const submit = async (e) => {
@@ -65,12 +74,15 @@ export function LoginScreen() {
       if (mode === 'signup') {
         const { data, error: err } = await supabase.auth.signUp({ email, password });
         if (err) throw err;
-        if (data.session) markSignedIn();
-        else setNotice('Check your email to confirm the account, then sign in here.');
+        if (data.session) {
+          markSignedIn();
+          clearSignOutNote();
+        } else setNotice('Check your email to confirm the account, then sign in here.');
       } else {
         const { error: err } = await supabase.auth.signInWithPassword({ email, password });
         if (err) throw err;
         markSignedIn();
+        clearSignOutNote();
       }
     } catch (err) {
       setError(err.message);
@@ -83,6 +95,12 @@ export function LoginScreen() {
     <ScreenShell>
       <div style={titleStyle}>OS</div>
       <div style={subtitleStyle}>{mode === 'signup' ? 'Create your account' : 'Sign in to continue'}</div>
+      {lastSignOut && (
+        <div style={{ ...subtitleStyle, fontSize: font.size.xs }}>
+          Signed out ({SIGN_OUT_REASONS[lastSignOut.reason] ?? lastSignOut.reason}) at{' '}
+          {new Date(lastSignOut.at).toLocaleTimeString()}.
+        </div>
+      )}
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: space[3] }}>
         <input
           type="email"
@@ -215,7 +233,7 @@ export function PinPad({ title, subtitle, error, onComplete, footer }) {
   );
 }
 
-export function LockScreen({ onVerify, onSignOut }) {
+export function LockScreen({ onVerify }) {
   const [error, setError] = useState(null);
   return (
     <ScreenShell>
@@ -226,11 +244,6 @@ export function LockScreen({ onVerify, onSignOut }) {
           const result = await onVerify(pin);
           setError(result.ok ? null : `Wrong PIN. ${result.remaining} ${result.remaining === 1 ? 'try' : 'tries'} left.`);
         }}
-        footer={
-          <button type="button" onClick={onSignOut} style={{ ...buttonGhost, border: 'none', fontSize: font.size.sm }}>
-            Sign out instead
-          </button>
-        }
       />
     </ScreenShell>
   );
