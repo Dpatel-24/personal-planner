@@ -23,7 +23,7 @@ import { setInstanceStatus } from '@/lib/data';
 import { useDragSensors, handleSharedDragEnd, useDragOverlayState, dragCollisionDetection } from '@/lib/dragAndDrop';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { getTagCardStyle } from '@/lib/tag-styles';
-import { isLifeFormulaEntryTask } from '@/lib/lifeFormulaLink';
+import { getSpecialTaskRoute } from '@/lib/lifeFormulaLink';
 import { color, space, radius, font, elevation } from '@/lib/tokens';
 import { card as cardStyle, buttonSecondary, textMuted } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
@@ -74,8 +74,9 @@ export default function WeekBoardView() {
   // its own form (pages/life-formula.js) instead of the generic EditModal —
   // see lib/lifeFormulaLink.js for how it's identified.
   const handleEdit = (instance) => {
-    if (isLifeFormulaEntryTask(instance)) {
-      router.push('/life-formula');
+    const specialRoute = getSpecialTaskRoute(instance);
+    if (specialRoute) {
+      router.push(specialRoute);
       return;
     }
     setEditing(instance);

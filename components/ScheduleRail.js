@@ -33,7 +33,7 @@ import {
 import { cascadeLater } from '@/lib/scheduling';
 import { formatDuration } from '@/lib/timer-queries';
 import { todayStr, humanDate } from '@/lib/dates';
-import { isLifeFormulaEntryTask } from '@/lib/lifeFormulaLink';
+import { getSpecialTaskRoute } from '@/lib/lifeFormulaLink';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { input as inputStyle, buttonPrimary, buttonSecondary, buttonGhost, heading, textMuted } from '@/lib/components';
 import { getTagCardStyle } from '@/lib/tag-styles';
@@ -502,8 +502,9 @@ export default function ScheduleRail({ standalone = false, dateStr, headerLabel 
   }, [load]);
 
   const handleEdit = (instance) => {
-    if (isLifeFormulaEntryTask(instance)) {
-      router.push('/life-formula');
+    const specialRoute = getSpecialTaskRoute(instance);
+    if (specialRoute) {
+      router.push(specialRoute);
       return;
     }
     setEditing(instance);

@@ -17,7 +17,7 @@ import { todayStr, addDays } from '@/lib/dates';
 import { useDragSensors, handleSharedDragEnd, useDragOverlayState, dragCollisionDetection } from '@/lib/dragAndDrop';
 import { useIsMobile } from '@/lib/useIsMobile';
 import { getTagCardStyle } from '@/lib/tag-styles';
-import { isLifeFormulaEntryTask } from '@/lib/lifeFormulaLink';
+import { getSpecialTaskRoute } from '@/lib/lifeFormulaLink';
 import { color, space, radius, border, font, elevation } from '@/lib/tokens';
 import { buttonSecondary, buttonPrimary, input as inputStyle } from '@/lib/components';
 import { useRefresh } from './RefreshContext';
@@ -97,8 +97,9 @@ export default function CalendarView({ onManageTags }) {
 
   // Same special-case routing as WeekBoardView — see lib/lifeFormulaLink.js.
   const handleEdit = (instance) => {
-    if (isLifeFormulaEntryTask(instance)) {
-      router.push('/life-formula');
+    const specialRoute = getSpecialTaskRoute(instance);
+    if (specialRoute) {
+      router.push(specialRoute);
       return;
     }
     setEditing(instance);

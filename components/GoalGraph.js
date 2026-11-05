@@ -57,6 +57,7 @@ const LEAF_CARD_HEIGHT = 40;
 const ROOT_CARD_WIDTH = 240; // "slightly larger" than non-root, per the ask
 const NON_LEAF_CARD_HEIGHT = 52; // room for the title row + "X of Y complete" subtext row
 const PADDING = 24; // outer margin so edge cards/curves aren't clipped
+const PADDING_TOP = 44; // extra headroom: the first row's taller non-leaf card sits half a card-height above its row center
 const RING_SIZE = 20;
 const RING_STROKE = 3;
 
@@ -267,7 +268,7 @@ export default function GoalGraph({
   };
 
   const contentWidth = Math.max(...nodes.map((n) => n.x + n.width)) + PADDING * 2;
-  const contentHeight = Math.max(...nodes.map((n) => n.y + n.height / 2)) + PADDING * 2;
+  const contentHeight = Math.max(...nodes.map((n) => n.y + n.height / 2)) + PADDING_TOP + PADDING;
 
   return (
     <div style={{ overflowX: 'auto', overflowY: 'auto', maxWidth: '100%', maxHeight: '100%' }}>
@@ -279,9 +280,9 @@ export default function GoalGraph({
             const from = nodesById[e.from];
             const to = nodesById[e.to];
             const x1 = from.x + from.width + PADDING;
-            const y1 = from.y + PADDING;
+            const y1 = from.y + PADDING_TOP;
             const x2 = to.x + PADDING;
-            const y2 = to.y + PADDING;
+            const y2 = to.y + PADDING_TOP;
             const midX = (x1 + x2) / 2;
             return (
               <path
@@ -304,7 +305,7 @@ export default function GoalGraph({
               style={{
                 position: 'absolute',
                 left: n.x + PADDING,
-                top: n.y + PADDING - n.height / 2,
+                top: n.y + PADDING_TOP - n.height / 2,
                 width: n.width,
                 height: n.height,
                 boxSizing: 'border-box',
