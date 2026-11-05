@@ -9,13 +9,14 @@
 // unconditionally, header + content, no aside, at any width.
 import Head from 'next/head';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { listGoals, updateGoal, createGoal, deleteGoal, archiveGoals, unarchiveGoals } from '@/lib/goals-queries';
+import { listGoals, updateGoal, createGoal, deleteGoal, archiveGoals, unarchiveGoals, uncheckGoalBranch } from '@/lib/goals-queries';
 import { color, space, radius, font } from '@/lib/tokens';
 import { buttonGhost, textMuted } from '@/lib/components';
 import AppNav from '@/components/AppNav';
 import GoalGraph from '@/components/GoalGraph';
 import TagManagerModal from '@/components/TagManagerModal';
 import PillTabs from '@/components/PillTabs';
+import Modal from '@/components/Modal';
 
 // Tenure definitions (2026-09, explicit ask): Short-Term 1-6 months,
 // Medium-Term 6 months-2 years, Long-Term 2-5 years. TREE_RANGES is
@@ -30,6 +31,13 @@ const TREE_LABELS = ['Short-Term', 'Medium-Term', 'Long-Term', 'Completed'];
 const TREE_RANGES = ['1–6 months', '6 months–2 years', '2–5 years'];
 const TREE_CATEGORIES = ['short_term', 'medium_term', 'long_term']; // index-matched to TREE_LABELS[0..2] only — Completed (index 3) isn't category-scoped
 const COMPLETED_TAB = 3;
+
+// Medium/long-term trees are "process" trees with skill-tree progression:
+// root has no checkbox, a node can only be checked once its parent is, and
+// unchecking cascades down. Short-term trees are free-form projects. The
+// authoritative enforcement is the DB (migration goal_tree_progression_rules);
+// this list only drives the UI.
+const PROCESS_CATEGORIES = ['medium_term', 'long_term'];
 
 // Reshapes the flat `goals` list (as returned by listGoals(), each row
 // already carrying effective_category) into the nested {id, title, done,
@@ -47,16 +55,31 @@ function buildGoalForests(goals) {
     (childrenByParent[key] ??= []).push(g);
   }
 
-  function buildNode(g) {
+  // tier = depth from the root (root 0). A process-tree node is locked when
+  // its parent is unchecked — except tier 1, whose parent is the root, which
+  // never completes. checkedBelow counts checked descendants for the uncheck
+  // confirm copy (the active-only `childrenByParent` already excludes
+  // archived goals).
+  function buildNode(g, tier = 0, parentDone = false) {
     const kids = childrenByParent[g.id] || [];
-    const node = { id: g.id, title: g.title, done: g.is_complete };
-    if (kids.length) node.children = kids.map(buildNode);
+    const process = PROCESS_CATEGORIES.includes(g.effective_category);
+    const childNodes = kids.map((k) => buildNode(k, tier + 1, g.is_complete));
+    const node = {
+      id: g.id,
+      title: g.title,
+      done: g.is_complete,
+      process,
+      tier,
+      locked: process && tier >= 2 && !parentDone,
+      checkedBelow: childNodes.reduce((n, c) => n + (c.done ? 1 : 0) + c.checkedBelow, 0),
+    };
+    if (childNodes.length) node.children = childNodes;
     return node;
   }
 
   const roots = childrenByParent['root'] || [];
   return TREE_CATEGORIES.map((cat) =>
-    roots.filter((g) => g.effective_category === cat).map(buildNode)
+    roots.filter((g) => g.effective_category === cat).map((g) => buildNode(g))
   );
 }
 
@@ -132,10 +155,42 @@ export default function GoalsPage() {
   const forests = useMemo(() => buildGoalForests(goals), [goals]);
   const completedForest = useMemo(() => buildCompletedForest(goals), [goals]);
 
+  // Pending uncheck confirmation for a tier-2+ node in a process tree:
+  // { id, title, count } where count = checked nodes below it.
+  const [uncheckPrompt, setUncheckPrompt] = useState(null);
+
+  const runUncheck = async (id) => {
+    try {
+      await uncheckGoalBranch(id);
+      await load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   const onToggleLeaf = async (id) => {
     const goal = goals.find((g) => g.id === id);
     if (!goal) return;
     try {
+      // Process trees: unchecking cascades through the DB in one call, and
+      // tier 2+ asks first. Everything else (checking, and any short-term
+      // toggle) is the plain single-row update. Checking ahead is rejected by
+      // the DB trigger and surfaces through setError below.
+      if (goal.is_complete && PROCESS_CATEGORIES.includes(goal.effective_category)) {
+        const byId = new Map(goals.map((g) => [g.id, g]));
+        let tier = 0;
+        for (let cur = goal; cur.parent_id && tier < 100; tier += 1) cur = byId.get(cur.parent_id);
+        if (tier >= 2) {
+          const count = descendantIds(goals, id).filter((d) => {
+            const g = byId.get(d);
+            return g.is_complete && !g.is_archived;
+          }).length;
+          setUncheckPrompt({ id, title: goal.title, count });
+        } else {
+          await runUncheck(id);
+        }
+        return;
+      }
       await updateGoal(id, { isComplete: !goal.is_complete });
       await load(); // no full page reload — refetches goals + progress and re-renders
     } catch (e) {
@@ -361,6 +416,35 @@ export default function GoalsPage() {
       </div>
 
       {managingTags && <TagManagerModal onClose={() => setManagingTags(false)} />}
+
+      {uncheckPrompt && (
+        <Modal onClose={() => setUncheckPrompt(null)} width={380}>
+          <div style={{ fontSize: font.size.lg, fontWeight: font.weight.bold, color: color.ink, marginBottom: space[2] }}>
+            {`Uncheck "${uncheckPrompt.title}"?`}
+          </div>
+          <div style={{ ...textMuted, marginBottom: space[5] }}>
+            {uncheckPrompt.count > 0
+              ? `This also unchecks ${uncheckPrompt.count} node${uncheckPrompt.count === 1 ? '' : 's'} below it.`
+              : 'This marks it as not maintained.'}
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: space[2] }}>
+            <button type="button" autoFocus style={buttonGhost} onClick={() => setUncheckPrompt(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              style={{ ...buttonGhost, background: color.ink, color: color.white, border: `1px solid ${color.ink}` }}
+              onClick={() => {
+                const { id } = uncheckPrompt;
+                setUncheckPrompt(null);
+                runUncheck(id);
+              }}
+            >
+              Uncheck
+            </button>
+          </div>
+        </Modal>
+      )}
     </>
   );
 }

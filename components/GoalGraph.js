@@ -124,6 +124,8 @@ function layoutForest(roots) {
       complete,
       isLeaf,
       isRoot,
+      process: !!node.process,
+      locked: !!node.locked,
       width,
       height,
       x: depth * COLUMN_WIDTH,
@@ -170,12 +172,13 @@ function ProgressRing({ pct }) {
 // Leaf's circular checkbox — a plain circle (not a ring), filled solid with
 // a white checkmark when checked, per the ask (distinct from the non-leaf
 // progress ring, which is always a partial arc).
-function LeafCheckbox({ checked, onToggle }) {
+function LeafCheckbox({ checked, onToggle, disabled = false }) {
   return (
     <button
       type="button"
       onClick={onToggle}
-      aria-label={checked ? 'Mark not done' : 'Mark done'}
+      disabled={disabled}
+      aria-label={disabled ? 'Locked until its parent is checked' : checked ? 'Mark not done' : 'Mark done'}
       style={{
         flexShrink: 0,
         width: RING_SIZE,
@@ -187,7 +190,7 @@ function LeafCheckbox({ checked, onToggle }) {
         alignItems: 'center',
         justifyContent: 'center',
         padding: 0,
-        cursor: 'pointer',
+        cursor: disabled ? 'not-allowed' : 'pointer',
       }}
     >
       {checked && (
@@ -196,6 +199,16 @@ function LeafCheckbox({ checked, onToggle }) {
         </svg>
       )}
     </button>
+  );
+}
+
+// Small padlock shown on locked process-tree nodes.
+function LockIcon() {
+  return (
+    <svg width={12} height={12} viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }} aria-label="Locked">
+      <rect x="3" y="7" width="10" height="7" rx="1.5" stroke={color.muted} strokeWidth="1.5" />
+      <path d="M5.5 7V5a2.5 2.5 0 015 0v2" stroke={color.muted} strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -303,11 +316,18 @@ export default function GoalGraph({
                 background: color.card,
                 border: n.isRoot ? `2px solid ${color.ink}` : `1px solid ${color.mutedFaint}`,
                 borderRadius: radius.lg,
+                opacity: n.locked ? 0.5 : 1,
                 overflow: 'hidden', // safety net — the subtext line already clips itself, this covers anything else
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: space[2] }}>
-                {n.isLeaf ? (
+                {n.process ? (
+                  // Process trees: every non-root node is checkable (in
+                  // order); the root is a vision and never gets a checkbox.
+                  n.isRoot ? null : (
+                    <LeafCheckbox checked={!!n.done} onToggle={() => onToggleLeaf(n.id)} disabled={n.locked} />
+                  )
+                ) : n.isLeaf ? (
                   <LeafCheckbox checked={!!n.done} onToggle={() => onToggleLeaf(n.id)} />
                 ) : (
                   <ProgressRing pct={pct} />
@@ -359,8 +379,8 @@ export default function GoalGraph({
                       minWidth: 0,
                       fontSize: n.isRoot ? font.size.md : font.size.sm,
                       fontWeight: n.isRoot ? font.weight.bold : font.weight.medium,
-                      color: n.isLeaf && n.done ? color.mutedFaint : color.ink,
-                      textDecoration: n.isLeaf && n.done ? 'line-through' : 'none',
+                      color: (n.isLeaf || n.process) && n.done ? color.mutedFaint : color.ink,
+                      textDecoration: (n.isLeaf || n.process) && n.done ? 'line-through' : 'none',
                       whiteSpace: 'nowrap',
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
@@ -371,7 +391,8 @@ export default function GoalGraph({
                     {n.title}
                   </span>
                 )}
-                {!n.isLeaf && (
+                {n.locked && <LockIcon />}
+                {!n.isLeaf && !n.process && (
                   <span style={{ fontSize: font.size.xs, color: color.muted, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
                     {pct}%
                   </span>
@@ -382,7 +403,7 @@ export default function GoalGraph({
                     card in the Completed view instead, the safety net back
                     out. Text buttons, not icon-only — this is a rarer
                     action than +/×, worth a label. */}
-                {n.isRoot && !archivedView && n.complete && (
+                {n.isRoot && !archivedView && n.complete && !n.process && (
                   <button
                     type="button"
                     onClick={(e) => {
@@ -489,7 +510,7 @@ export default function GoalGraph({
                   ×
                 </button>
               </div>
-              {!n.isLeaf && (
+              {!n.isLeaf && !n.process && (
                 <div
                   style={{
                     fontSize: font.size.xs,
