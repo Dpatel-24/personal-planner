@@ -1,5 +1,6 @@
 import "@/styles/globals.css";
 import { Inter } from "next/font/google";
+import AuthGate from "@/components/AuthGate";
 
 // next/font/google self-hosts the font (no external CDN request, no CLS).
 // _document.js can't use next/font on this Next version (confirmed via a
@@ -34,7 +35,9 @@ export default function App({ Component, pageProps }) {
       // that meta tag's own updated content.
       style={{ paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
     >
-      <Component {...pageProps} />
+      <AuthGate>
+        <Component {...pageProps} />
+      </AuthGate>
     </div>
   );
 }

@@ -17,6 +17,7 @@
 import Link from 'next/link';
 import { color, space, radius, border, font } from '@/lib/tokens';
 import { heading, buttonGhost } from '@/lib/components';
+import AccountMenu from './AccountMenu';
 
 export default function AppNav({
   current,
@@ -102,6 +103,7 @@ export default function AppNav({
         <Link href="/books" style={utilityLinkStyle(current === 'books')}>
           Books
         </Link>
+        <AccountMenu />
       </nav>
     </header>
   );
